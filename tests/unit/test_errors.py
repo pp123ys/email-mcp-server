@@ -1,4 +1,3 @@
-import pytest
 from email_mcp.errors import EmailMCPError, ErrorCode, error_result
 
 
