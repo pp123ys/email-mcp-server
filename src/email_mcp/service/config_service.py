@@ -4,6 +4,8 @@ from __future__ import annotations
 import os
 from typing import Literal, cast
 
+import pydantic
+
 from email_mcp.config import save_account
 from email_mcp.context import AppContext
 from email_mcp.errors import EmailMCPError, ErrorCode, error_result
@@ -26,10 +28,12 @@ class ConfigService:
         self,
         ctx: AppContext,
         env_path: str | None = None,
+        retry_attempts: int = 1,
         retry_delay_base: float = 0.0,
     ):
         self.ctx = ctx
         self.env_path = env_path
+        self.retry_attempts = retry_attempts
         self.retry_delay_base = retry_delay_base
 
     def get_account_status(self) -> dict[str, object]:
@@ -72,8 +76,12 @@ class ConfigService:
         sent_folder: str = "Sent",
     ) -> dict[str, object]:
         """校验并写入账号配置，热重载上下文。auth_secret 为敏感信息。"""
-        if not auth_secret:
+        if not auth_secret.strip():
             return error_result(ErrorCode.CONFIG_INVALID, "auth_secret 不能为空")
+        if not username.strip() or not imap_host.strip() or not smtp_host.strip():
+            return error_result(
+                ErrorCode.CONFIG_INVALID, "username/imap_host/smtp_host 不能为空"
+            )
         if auth_mode not in ("app_password", "password"):
             return error_result(
                 ErrorCode.CONFIG_INVALID,
@@ -93,7 +101,12 @@ class ConfigService:
                 auth_secret=auth_secret,
                 sent_folder=sent_folder,
             )
-        except Exception as exc:  # pydantic ValidationError 等
+        except pydantic.ValidationError as exc:
+            return error_result(
+                ErrorCode.CONFIG_INVALID,
+                f"账号配置不合法: {exc.errors()[0]['msg'] if exc.errors() else '校验失败'}",
+            )
+        except Exception as exc:
             sealed = EmailMCPError.from_exception(exc)
             return error_result(sealed.code, sealed.message)
         try:
@@ -101,6 +114,7 @@ class ConfigService:
         except OSError as exc:
             return error_result(ErrorCode.CONFIG_INVALID, f"写入配置失败: {exc}")
         self.ctx.reload(account)
+        self.ctx.start_scheduler()  # 热重载后调度立即生效（幂等）
         return {"success": True, "data": {"configured": True, "username": account.username}}
 
     def test_email_connection(self) -> dict[str, object]:
@@ -112,12 +126,20 @@ class ConfigService:
         account = self.ctx.account
         results: dict[str, object] = {}
         try:
-            with IMAPClient(account, retry_delay_base=self.retry_delay_base).connect():
+            with IMAPClient(
+                account,
+                retry_attempts=self.retry_attempts,
+                retry_delay_base=self.retry_delay_base,
+            ).connect():
                 results["imap"] = {"ok": True}
         except EmailMCPError as exc:
             results["imap"] = {"ok": False, "code": str(exc.code), "message": exc.message}
         try:
-            SMTPClient(account, retry_delay_base=self.retry_delay_base).check()
+            SMTPClient(
+                account,
+                retry_attempts=self.retry_attempts,
+                retry_delay_base=self.retry_delay_base,
+            ).check()
             results["smtp"] = {"ok": True}
         except EmailMCPError as exc:
             results["smtp"] = {"ok": False, "code": str(exc.code), "message": exc.message}

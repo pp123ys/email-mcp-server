@@ -37,6 +37,7 @@ class AppContext:
         if self.account is None or self.provider is None:
             self.configured = False
             return
+        old_scheduler = self.scheduler
         # 用局部非 None 引用：字段是 Optional，mypy strict 下无法在回调中收窄
         scheduler_store = SchedulerStore(Path("data/scheduler.json"))
         self.scheduler_store = scheduler_store
@@ -67,8 +68,18 @@ class AppContext:
             send_fn=send,
             snooze_fn=snooze,
         )
+        if old_scheduler is not None:
+            old_scheduler.stop()  # 防止旧线程带着旧凭据闭包继续处理
         self.configured = True
 
     def reload(self, account: Account) -> None:
-        """配置工具热重载：用新账号重建服务。"""
+        """配置工具热重载：用新账号重建服务与调度器（旧调度器先 stop）。
+
+        注意：重建后调度器处于未启动状态，需要调用 start_scheduler() 使其生效。
+        """
         self.configure(account)
+
+    def start_scheduler(self) -> None:
+        """启动调度器后台循环（幂等）；未配置时无操作。"""
+        if self.scheduler is not None:
+            self.scheduler.start()

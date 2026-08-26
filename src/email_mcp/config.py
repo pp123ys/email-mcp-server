@@ -91,7 +91,11 @@ def save_account(account: Account, env_path: str | None = None) -> None:
         }
     )
     lines = [f"{key}={value}" for key, value in existing.items()]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # 原子写：先写临时文件再 os.replace，避免写一半崩溃损坏 .env
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def send_rate_limit() -> int:

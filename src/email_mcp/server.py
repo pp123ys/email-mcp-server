@@ -48,8 +48,7 @@ def main() -> None:
     ctx = AppContext(account=account, provider=ImapProvider())
     mcp = build_server(ctx)
 
-    if ctx.scheduler is not None:
-        ctx.scheduler.start()
+    ctx.start_scheduler()
     try:
         if args.http:
             token = http_token()

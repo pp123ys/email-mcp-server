@@ -5,20 +5,15 @@ import functools
 from typing import Any, Callable, TypeVar
 
 from email_mcp.context import AppContext
+from email_mcp.errors import ErrorCode, error_result
 
 T = TypeVar("T", bound=Callable[..., Any])
 
-CONFIG_MISSING_RESPONSE = {
-    "success": False,
-    "error": {
-        "code": "CONFIG_MISSING",
-        "message": (
-            "邮箱尚未配置。请先调用 get_account_status 查看缺失配置，"
-            "再调用 configure_account 完成配置（配置前请先向用户确认凭据）。"
-        ),
-        "details": {},
-    },
-}
+CONFIG_MISSING_RESPONSE = error_result(
+    ErrorCode.CONFIG_MISSING,
+    "邮箱尚未配置。请先调用 get_account_status 查看缺失配置，"
+    "再调用 configure_account 完成配置（配置前请先向用户确认凭据）。",
+)
 
 
 def guard(ctx: AppContext) -> Callable[[T], T]:
