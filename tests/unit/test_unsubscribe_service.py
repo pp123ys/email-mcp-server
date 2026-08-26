@@ -1,4 +1,4 @@
-from email_mcp.errors import ErrorCode
+from email_mcp.errors import EmailMCPError, ErrorCode
 from email_mcp.service.unsubscribe_service import UnsubscribeService, parse_list_unsubscribe
 
 
@@ -44,3 +44,30 @@ def test_unsubscribe_invalid_email_id(account, provider):
     result = svc.unsubscribe("no-colon-here")
     assert result["success"] is False
     assert result["error"]["code"] == ErrorCode.CONFIG_INVALID
+
+
+def test_unsubscribe_case_insensitive_header(account, provider):
+    provider.messages[0].headers = {"list-unsubscribe": "<mailto:unsub@news.com>"}
+    svc = UnsubscribeService(provider, account)
+    result = svc.unsubscribe("INBOX:1")
+    assert result["success"] is True
+    assert result["data"]["unsubscribed_to"] == "unsub@news.com"
+
+
+def test_unsubscribe_url_only_header(account, provider):
+    provider.messages[0].headers = {"List-Unsubscribe": "<https://news.com/unsub>"}
+    svc = UnsubscribeService(provider, account)
+    result = svc.unsubscribe("INBOX:1")
+    assert result["success"] is False
+    assert result["error"]["code"] == ErrorCode.UNSUBSCRIBE_UNSUPPORTED
+
+
+def test_unsubscribe_send_error_preserves_code(account, provider, monkeypatch):
+    def boom(self, account, *, to, cc=None, subject, body):
+        raise EmailMCPError(ErrorCode.SMTP_AUTH_FAILED, "smtp auth failed")
+
+    monkeypatch.setattr(type(provider), "send", boom)
+    provider.messages[0].headers = {"List-Unsubscribe": "<mailto:unsub@news.com>"}
+    svc = UnsubscribeService(provider, account)
+    result = svc.unsubscribe("INBOX:1")
+    assert result["error"]["code"] == ErrorCode.SMTP_AUTH_FAILED
