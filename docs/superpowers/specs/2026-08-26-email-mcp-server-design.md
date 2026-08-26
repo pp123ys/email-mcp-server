@@ -222,6 +222,8 @@ Account           # v1 单实例；字段已多账号化
 6. **`.env` 治理**：`.env` 加入 `.gitignore`；提供 `.env.example` 模板；README 明确提示不提交凭据。
 7. **HTTP 传输安全**：Streamable HTTP 支持 Bearer token 认证——配置 token 则要求请求带 `Authorization` 头；未配置则只监听 localhost。
 
+> **已接受的实现偏差（2026-08-27 记录）**：锁定的 mcp 1.29.x 的 `FastMCP.run()` 不提供静态 Bearer 认证参数（仅 OAuth 钩子）。因此 `EMAIL_HTTP_TOKEN` 当前不校验请求，仅在 `--http` 启动时产生警告。缓解措施：默认仅绑定 `127.0.0.1` + README 明确说明 + 启动警告。若未来升级到支持静态认证的 mcp 版本，再启用 token 校验。
+
 ## 8. 测试策略
 
 ### 三层测试（不依赖真实邮箱）
