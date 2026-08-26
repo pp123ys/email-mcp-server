@@ -122,7 +122,7 @@ class EmailService:
             if len(content) > 25 * 1024 * 1024:
                 raise EmailMCPError(ErrorCode.EMAIL_TOO_LARGE, "附件超过 25MB 上限")
             import base64
-            return {"filename": part_id, "content_base64": base64.b64encode(content).decode()}
+            return {"part_id": part_id, "content_base64": base64.b64encode(content).decode()}
         return self._wrap(run)
 
     def get_email_headers(self, email_id: str) -> dict[str, Any]:

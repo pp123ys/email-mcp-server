@@ -28,11 +28,16 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
             unread_only=unread_only, from_email=from_email, folder=folder,
         )
 
-    @mcp.tool(description="读取单封邮件完整内容（纯文本正文 + 附件元信息）")
+    @mcp.tool(
+        description=(
+            "读取单封邮件完整内容（纯文本正文 + 附件元信息）；"
+            "email_id 格式为 folder:uid，如 INBOX:1"
+        )
+    )
     def read_email(email_id: str) -> dict[str, Any]:
         return svc.read_email(email_id)
 
-    @mcp.tool(description="拉取整条会话线程")
+    @mcp.tool(description="拉取整条会话线程；email_id 格式为 folder:uid，如 INBOX:1")
     def get_thread(email_id: str) -> dict[str, Any]:
         return thread.get_thread(email_id)
 
@@ -52,15 +57,20 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
     def list_folders() -> dict[str, Any]:
         return svc.list_folders()
 
-    @mcp.tool(description="列出某邮件的附件元信息")
+    @mcp.tool(description="列出某邮件的附件元信息；email_id 格式为 folder:uid，如 INBOX:1")
     def get_attachments(email_id: str) -> dict[str, Any]:
         return svc.get_attachments(email_id)
 
-    @mcp.tool(description="按 part_id 下载附件，返回 base64 内容")
+    @mcp.tool(
+        description=(
+            "按 part_id 下载附件，返回 base64 内容；"
+            "email_id 格式为 folder:uid，如 INBOX:1"
+        )
+    )
     def download_attachment(email_id: str, part_id: str) -> dict[str, Any]:
         return svc.download_attachment(email_id, part_id)
 
-    @mcp.tool(description="读取原始 RFC 822 邮件头")
+    @mcp.tool(description="读取原始 RFC 822 邮件头；email_id 格式为 folder:uid，如 INBOX:1")
     def get_email_headers(email_id: str) -> dict[str, Any]:
         return svc.get_email_headers(email_id)
 

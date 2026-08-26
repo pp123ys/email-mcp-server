@@ -38,3 +38,17 @@ async def test_get_account_info_tool(account, provider):
     result = await mcp.call_tool("get_account_info", {})
     assert "me@test.local" in str(result)
     assert "s3cret" not in str(result)
+
+
+@pytest.mark.asyncio
+async def test_get_email_headers_tool(account, provider):
+    mcp = build_server(AppContext(account=account, provider=provider))
+    result = await mcp.call_tool("get_email_headers", {"email_id": "INBOX:1"})
+    assert "s1" in str(result)
+
+
+@pytest.mark.asyncio
+async def test_list_folders_tool(account, provider):
+    mcp = build_server(AppContext(account=account, provider=provider))
+    result = await mcp.call_tool("list_folders", {})
+    assert "INBOX" in str(result)

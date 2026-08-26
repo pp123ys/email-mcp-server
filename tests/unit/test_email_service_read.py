@@ -90,3 +90,30 @@ def test_wrap_redacts_account_secret(account, provider, monkeypatch):
     assert result["success"] is False
     assert "s3cret-not-in-logs" not in str(result)
     assert "***" in str(result)
+
+
+def test_list_folders(account, provider):
+    svc = make_service(account, provider)
+    data = svc.list_folders()["data"]
+    assert "INBOX" in data["folders"]
+
+
+def test_get_attachments(account, provider):
+    svc = make_service(account, provider)
+    result = svc.get_attachments("INBOX:1")
+    assert result["success"] is True
+
+
+def test_get_email_headers(account, provider):
+    svc = make_service(account, provider)
+    result = svc.get_email_headers("INBOX:1")
+    assert result["success"] is True
+    assert result["data"]["headers"]["Subject"] == "s1"
+
+
+def test_download_attachment_success(account, provider):
+    svc = make_service(account, provider)
+    result = svc.download_attachment("INBOX:1", "1")
+    assert result["success"] is True
+    assert result["data"]["part_id"] == "1"
+    assert "content_base64" in result["data"]
