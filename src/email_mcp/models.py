@@ -23,7 +23,7 @@ class AttachmentMeta(BaseModel):
 
 
 class EmailMessage(BaseModel):
-    """一封邮件的完整表示。"""
+    """一封邮件的完整表示。JSON 序列化键为 from_（未设别名）。"""
 
     id: str  # 格式 "folder:uid"
     account_id: str
@@ -54,5 +54,5 @@ class Account(BaseModel):
     smtp_ssl: bool = True
     username: str
     auth_mode: Literal["app_password", "password"] = "app_password"
-    auth_secret: str = ""  # 只从环境变量注入，绝不落日志
+    auth_secret: str = Field(default="", exclude=True, repr=False)  # 只从环境变量注入，绝不落日志
     sent_folder: str = "Sent"

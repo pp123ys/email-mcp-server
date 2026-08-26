@@ -35,6 +35,24 @@ def test_attachment_meta_fields():
     assert a.part_id == "1"
 
 
+def test_email_message_serialization_contract():
+    msg = EmailMessage(
+        id="INBOX:1", account_id="default", folder="INBOX", subject="s",
+        from_=EmailAddress(email="a@b.com"), to=[],
+        date=datetime(2026, 1, 1, tzinfo=timezone.utc), body="b",
+    )
+    dumped = msg.model_dump(mode="json")
+    assert dumped["from_"]["email"] == "a@b.com"
+    assert "from" not in dumped
+
+
+def test_account_secret_not_in_dump_or_repr():
+    acc = Account(imap_host="imap", smtp_host="smtp", username="u@x.com", auth_secret="topsecret")
+    assert "topsecret" not in str(acc.model_dump())
+    assert "topsecret" not in repr(acc)
+    assert acc.auth_secret == "topsecret"  # 字段仍可访问
+
+
 def test_account_requires_hosts():
     with pytest.raises(ValidationError):
         Account(imap_host="", smtp_host="", username="u@x.com")
