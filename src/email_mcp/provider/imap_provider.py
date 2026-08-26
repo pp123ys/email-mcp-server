@@ -61,7 +61,7 @@ class ImapProvider:
             if from_email:
                 criteria.append(f'FROM "{from_email}"')
             status, data = (
-                conn.search(None, *criteria) if criteria else conn.search(None, "ALL")
+                conn.uid("SEARCH", *criteria) if criteria else conn.uid("SEARCH", "ALL")
             )
             if status != "OK":
                 return [], 0
@@ -71,7 +71,7 @@ class ImapProvider:
             batch = uids[start : start + page_size]
             messages: list[EmailMessage] = []
             for uid in batch:
-                status, fetch = conn.fetch(uid, "(RFC822)")
+                status, fetch = conn.uid("FETCH", uid, "(RFC822)")
                 if status == "OK":
                     raw = _fetch_rfc822(fetch)
                     if raw is not None:
@@ -83,7 +83,7 @@ class ImapProvider:
     def get_message(self, account: Account, folder: str, uid: str) -> EmailMessage:
         with self._imap(account).connect() as conn:
             conn.select(folder, readonly=True)
-            status, fetch = conn.fetch(uid, "(RFC822)")
+            status, fetch = conn.uid("FETCH", uid, "(RFC822)")
             if status != "OK":
                 raise KeyError(f"{folder}:{uid}")
             raw = _fetch_rfc822(fetch)
@@ -107,11 +107,11 @@ class ImapProvider:
                     if typ != "OK":
                         continue
                     for header in ("Message-ID", "In-Reply-To", "References"):
-                        status, data = conn.search(None, "HEADER", header, f'"{mid}"')
+                        status, data = conn.uid("SEARCH", "HEADER", header, f'"{mid}"')
                         if status != "OK" or not data or not data[0]:
                             continue
                         for uid in data[0].split():
-                            status, fetch = conn.fetch(uid, "(RFC822)")
+                            status, fetch = conn.uid("FETCH", uid, "(RFC822)")
                             if status == "OK":
                                 raw = _fetch_rfc822(fetch)
                                 if raw is not None:
@@ -152,12 +152,12 @@ class ImapProvider:
                 criteria += ["SINCE", _imap_date(since)]
             if until:
                 criteria += ["BEFORE", _imap_date(until)]
-            status, data = conn.search(None, *criteria)
+            status, data = conn.uid("SEARCH", *criteria)
             if status != "OK" or not data or not data[0]:
                 return []
             messages: list[EmailMessage] = []
             for uid in data[0].split():
-                status, fetch = conn.fetch(uid, "(RFC822)")
+                status, fetch = conn.uid("FETCH", uid, "(RFC822)")
                 if status == "OK":
                     raw = _fetch_rfc822(fetch)
                     if raw is not None:
@@ -188,7 +188,7 @@ class ImapProvider:
     ) -> bytes:
         with self._imap(account).connect() as conn:
             conn.select(folder, readonly=True)
-            status, fetch = conn.fetch(uid, "(RFC822)")
+            status, fetch = conn.uid("FETCH", uid, "(RFC822)")
             if status != "OK":
                 raise KeyError(f"{folder}:{uid}")
             raw = _fetch_rfc822(fetch)
@@ -237,12 +237,12 @@ class ImapProvider:
             typ, _ = conn.select("Drafts", readonly=True)
             if typ != "OK":
                 return []
-            status, data = conn.search(None, "ALL")
+            status, data = conn.uid("SEARCH", "ALL")
             if status != "OK" or not data or not data[0]:
                 return []
             drafts: list[EmailMessage] = []
             for uid in data[0].split():
-                status, fetch = conn.fetch(uid, "(RFC822)")
+                status, fetch = conn.uid("FETCH", uid, "(RFC822)")
                 if status == "OK":
                     raw = _fetch_rfc822(fetch)
                     if raw is not None:
@@ -270,9 +270,9 @@ class ImapProvider:
         with self._imap(account).connect() as conn:
             conn.select(folder)
             if add:
-                conn.store(uid, "+FLAGS", flags)
+                conn.uid("STORE", uid, "+FLAGS", flags)
             else:
-                conn.store(uid, "-FLAGS", flags)
+                conn.uid("STORE", uid, "-FLAGS", flags)
 
     def mark_read(self, account: Account, folder: str, uid: str) -> None:
         self._store_flags(account, folder, uid, True, "(\\Seen)")
@@ -286,8 +286,8 @@ class ImapProvider:
     def move(self, account: Account, folder: str, uid: str, dest_folder: str) -> None:
         with self._imap(account).connect() as conn:
             conn.select(folder)
-            conn.copy(uid, dest_folder)
-            conn.store(uid, "+FLAGS", "(\\Deleted)")
+            conn.uid("COPY", uid, dest_folder)
+            conn.uid("STORE", uid, "+FLAGS", "(\\Deleted)")
             conn.expunge()
 
     def trash(self, account: Account, folder: str, uid: str) -> None:

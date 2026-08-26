@@ -90,3 +90,24 @@ def test_find_part_by_path():
     assert part is not None
     assert part.get_filename() == "doc.pdf"
     assert find_part_by_path(msg, (9, 9)) is None
+
+
+def test_parse_body_skips_attachment_text():
+    raw = (
+        b"From: a@b.com\r\nTo: me@x.com\r\nSubject: Att\r\n"
+        b"Content-Type: multipart/mixed; boundary=bb\r\n\r\n"
+        b"--bb\r\nContent-Type: text/html\r\n\r\n<html><body><p>Hello</p></body></html>\r\n"
+        b"--bb\r\nContent-Type: text/plain; name=\"notes.txt\"\r\n"
+        b"Content-Disposition: attachment; filename=\"notes.txt\"\r\n\r\n"
+        b"attachment content, not body\r\n"
+        b"--bb--\r\n"
+    )
+    msg = parse_email_message(raw, folder="INBOX", uid="1")
+    assert "attachment content" not in msg.body
+    assert "Hello" in msg.body
+
+
+def test_parse_missing_date_is_aware():
+    raw = b"From: a@b.com\r\nTo: me@x.com\r\nSubject: no date\r\n\r\nbody"
+    msg = parse_email_message(raw, folder="INBOX", uid="1")
+    assert msg.date.tzinfo is not None

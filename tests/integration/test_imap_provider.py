@@ -1,4 +1,4 @@
-"""验证 ImapProvider 用 mock 的 IMAP 连接执行正确协议序列。"""
+"""验证 ImapProvider 用 mock 的 IMAP 连接执行正确协议序列（全部基于 UID 操作）。"""
 from unittest.mock import MagicMock, patch
 
 from email_mcp.provider.imap_provider import ImapProvider
@@ -13,8 +13,15 @@ RAW = (
 def test_list_messages_selects_inbox_and_fetches(account):
     conn = MagicMock()
     conn.select.return_value = ("OK", [b"1"])
-    conn.search.return_value = ("OK", [b"1"])
-    conn.fetch.return_value = ("OK", [(b"1 (RFC822 {38}", RAW, b")")])
+
+    def fake_uid(command, *args):
+        if command == "SEARCH":
+            return ("OK", [b"1"])
+        if command == "FETCH":
+            return ("OK", [(b"1 (RFC822 {38}", RAW, b")")])
+        return ("OK", [b""])
+
+    conn.uid.side_effect = fake_uid
     with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
         provider = ImapProvider()
         msgs, total = provider.list_messages(account, "INBOX", page=1, page_size=10)
@@ -26,7 +33,7 @@ def test_list_messages_selects_inbox_and_fetches(account):
 def test_get_message_missing_raises_keyerror(account):
     conn = MagicMock()
     conn.select.return_value = ("OK", [b"1"])
-    conn.fetch.return_value = ("BAD", [])
+    conn.uid.return_value = ("BAD", [])
     with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
         provider = ImapProvider()
         try:
@@ -51,21 +58,21 @@ def test_get_thread_expands_chain(account):
     conn = MagicMock()
     conn.select.return_value = ("OK", [b"2"])
 
-    def fake_search(*args):
-        if "Message-ID" in args:
-            return ("OK", [b"1"])
-        if "In-Reply-To" in args:
-            return ("OK", [b"2"])
+    def fake_uid(command, *args):
+        if command == "SEARCH":
+            if "Message-ID" in args:
+                return ("OK", [b"1"])
+            if "In-Reply-To" in args:
+                return ("OK", [b"2"])
+            return ("OK", [b""])
+        if command == "FETCH":
+            raw = by_uid.get(args[0])
+            if raw is None:
+                return ("OK", [b""])
+            return ("OK", [(args[0], raw, b")")])
         return ("OK", [b""])
 
-    def fake_fetch(uid, *args):
-        raw = by_uid.get(uid)
-        if raw is None:
-            return ("OK", [b""])
-        return ("OK", [(uid, raw, b")")])
-
-    conn.search.side_effect = fake_search
-    conn.fetch.side_effect = fake_fetch
+    conn.uid.side_effect = fake_uid
     with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
         provider = ImapProvider()
         thread = provider.get_thread(account, "<r@x.com>")
@@ -86,7 +93,7 @@ def test_download_attachment_returns_payload(account):
     )
     conn = MagicMock()
     conn.select.return_value = ("OK", [b"1"])
-    conn.fetch.return_value = ("OK", [(b"1 (RFC822 {38}", raw, b")")])
+    conn.uid.return_value = ("OK", [(b"1 (RFC822 {38}", raw, b")")])
     with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
         provider = ImapProvider()
         content = provider.download_attachment(account, "INBOX", "1", "2")
@@ -108,25 +115,58 @@ def test_get_thread_resolves_ancestors_from_reply_seed(account):
     conn = MagicMock()
     conn.select.return_value = ("OK", [b"2"])
 
-    def fake_search(*args):
-        quoted = args[-1] if args else ""
-        mid = quoted.strip('"')
-        if mid == "<p@x.com>":
-            return ("OK", [b"2"])  # 种子（回复）的 Message-ID
-        if mid == "<r@x.com>":
-            return ("OK", [b"1"])  # 祖先的 Message-ID
+    def fake_uid(command, *args):
+        if command == "SEARCH":
+            quoted = args[-1] if args else ""
+            mid = quoted.strip('"')
+            if mid == "<p@x.com>":
+                return ("OK", [b"2"])  # 种子（回复）的 Message-ID
+            if mid == "<r@x.com>":
+                return ("OK", [b"1"])  # 祖先的 Message-ID
+            return ("OK", [b""])
+        if command == "FETCH":
+            raw = by_uid.get(args[0])
+            if raw is None:
+                return ("OK", [b""])
+            return ("OK", [(args[0], raw, b")")])
         return ("OK", [b""])
 
-    def fake_fetch(uid, *args):
-        raw = by_uid.get(uid)
-        if raw is None:
-            return ("OK", [b""])
-        return ("OK", [(uid, raw, b")")])
-
-    conn.search.side_effect = fake_search
-    conn.fetch.side_effect = fake_fetch
+    conn.uid.side_effect = fake_uid
     with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
         provider = ImapProvider()
         thread = provider.get_thread(account, "<p@x.com>")  # 种子是回复
     ids = {m.message_id for m in thread}
     assert ids == {"<r@x.com>", "<p@x.com>"}
+
+
+def test_mark_read_uses_uid_store(account):
+    conn = MagicMock()
+    conn.select.return_value = ("OK", [b"1"])
+    with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
+        provider = ImapProvider()
+        provider.mark_read(account, "INBOX", "1")
+    conn.uid.assert_called_once_with("STORE", "1", "+FLAGS", "(\\Seen)")
+
+
+def test_move_uses_uid_copy_then_expunge(account):
+    conn = MagicMock()
+    conn.select.return_value = ("OK", [b"1"])
+    with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
+        provider = ImapProvider()
+        provider.move(account, "INBOX", "1", "Archive")
+    calls = [c.args for c in conn.uid.call_args_list]
+    assert ("COPY", "1", "Archive") in calls
+    assert ("STORE", "1", "+FLAGS", "(\\Deleted)") in calls
+    conn.expunge.assert_called_once()
+
+
+def test_search_uses_uid_with_criteria(account):
+    conn = MagicMock()
+    conn.select.return_value = ("OK", [b"1"])
+    conn.uid.return_value = ("OK", [b"1"])
+    with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
+        provider = ImapProvider()
+        provider.search(account, query="invoice", folder="INBOX")
+    search_call = conn.uid.call_args_list[0].args
+    assert search_call[0] == "SEARCH"
+    assert "TEXT" in search_call

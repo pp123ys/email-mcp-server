@@ -3,7 +3,7 @@ from __future__ import annotations
 import email
 import re
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import datetime, timezone
 from email import policy
 from email.header import decode_header
 from email.message import MIMEPart
@@ -44,6 +44,8 @@ def _first_text_plain(part: MIMEPart) -> str:
             if text:
                 return text
         return ""
+    if part.get_content_disposition() == "attachment":
+        return ""
     if part.get_content_type() == "text/plain":
         return str(part.get_content())
     return ""
@@ -56,6 +58,8 @@ def _first_text_html(part: MIMEPart) -> str:
             if html:
                 return html
         return ""
+    if part.get_content_disposition() == "attachment":
+        return ""
     if part.get_content_type() == "text/html":
         return str(part.get_content())
     return ""
@@ -67,9 +71,13 @@ def _strip_html(html: str) -> str:
 
 def _parse_date(value: str | None) -> datetime:
     if not value:
-        return datetime.now()
+        return datetime.min.replace(tzinfo=timezone.utc)
     dt = parsedate_to_datetime(value)
-    return dt or datetime.now()
+    if dt is None:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 def _iter_parts_with_path(
