@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from email_mcp.config import http_token, load_account, send_rate_limit
+from email_mcp.config import http_token, load_account, save_account, send_rate_limit
 from email_mcp.errors import EmailMCPError, ErrorCode
 
 
@@ -68,3 +68,42 @@ def test_send_rate_limit_invalid_returns_default(monkeypatch):
 def test_http_token_empty_returns_none(monkeypatch):
     monkeypatch.setenv("EMAIL_HTTP_TOKEN", "")
     assert http_token() is None
+
+
+def test_load_account_strict_false_returns_none_when_missing(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text("EMAIL_IMAP_HOST=imap.x.com\n", encoding="utf-8")
+    assert load_account(str(env), strict=False) is None
+
+
+def test_save_account_roundtrip(tmp_path):
+    from email_mcp.models import Account
+
+    env = tmp_path / ".env"
+    account = Account(
+        imap_host="imap.x.com", smtp_host="smtp.x.com", username="u@x.com",
+        auth_secret="secret", auth_mode="password",
+    )
+    save_account(account, str(env))
+    loaded = load_account(str(env), strict=True)
+    assert loaded is not None
+    assert loaded.username == "u@x.com"
+    assert loaded.auth_secret == "secret"
+    assert loaded.auth_mode == "password"
+    assert loaded.imap_port == 993
+
+
+def test_save_account_merges_existing(tmp_path):
+    from email_mcp.models import Account
+
+    env = tmp_path / ".env"
+    env.write_text("EMAIL_IMAP_HOST=old.host\nSOME_OTHER_KEY=keepme\n", encoding="utf-8")
+    account = Account(
+        imap_host="new.host", smtp_host="smtp.x.com", username="u@x.com",
+        auth_secret="s", sent_folder="[Gmail]/Sent Mail",
+    )
+    save_account(account, str(env))
+    text = env.read_text(encoding="utf-8")
+    assert "EMAIL_IMAP_HOST=new.host" in text
+    assert "SOME_OTHER_KEY=keepme" in text
+    assert "EMAIL_SENT_FOLDER=[Gmail]/Sent Mail" in text

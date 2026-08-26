@@ -12,7 +12,12 @@ async def test_build_server_registers_tools(account, provider):
     tools = await mcp.list_tools()
     names = {t.name for t in tools}
     assert {"list_inbox", "read_email", "send_email", "save_draft"} <= names
-    assert len(names) == 27
+    assert {
+        "get_account_status",
+        "configure_account",
+        "test_email_connection",
+    } <= names
+    assert len(names) == 30
 
 
 def test_appcontext_scheduler_retains_failed_scheduled_send(

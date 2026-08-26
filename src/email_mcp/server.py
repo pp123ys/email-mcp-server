@@ -8,7 +8,13 @@ from mcp.server.fastmcp import FastMCP
 from email_mcp.config import http_token, load_account
 from email_mcp.context import AppContext
 from email_mcp.provider.imap_provider import ImapProvider
-from email_mcp.tools import action_tools, advanced_tools, read_tools, send_tools
+from email_mcp.tools import (
+    action_tools,
+    advanced_tools,
+    config_tools,
+    read_tools,
+    send_tools,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +30,7 @@ def build_server(ctx: AppContext, *, host: str = "127.0.0.1", port: int = 8080) 
     send_tools.register(mcp, ctx)
     action_tools.register(mcp, ctx)
     advanced_tools.register(mcp, ctx)
+    config_tools.register(mcp, ctx)
     return mcp
 
 
@@ -32,13 +39,17 @@ def main() -> None:
     parser.add_argument("--http", action="store_true", help="以 Streamable HTTP 模式运行")
     args = parser.parse_args()
 
-    account = load_account()
+    account = load_account(strict=False)
+    if account is None:
+        logger.warning(
+            "未检测到邮箱配置（.env），服务以未配置状态启动；"
+            "agent 可通过 get_account_status 查看状态、configure_account 完成配置"
+        )
     ctx = AppContext(account=account, provider=ImapProvider())
     mcp = build_server(ctx)
 
-    scheduler = ctx.scheduler
-    assert scheduler is not None  # AppContext.__post_init__ 总会创建 Scheduler
-    scheduler.start()
+    if ctx.scheduler is not None:
+        ctx.scheduler.start()
     try:
         if args.http:
             token = http_token()
@@ -54,7 +65,8 @@ def main() -> None:
         else:
             mcp.run(transport="stdio")
     finally:
-        scheduler.stop()
+        if ctx.scheduler is not None:
+            ctx.scheduler.stop()
 
 
 if __name__ == "__main__":

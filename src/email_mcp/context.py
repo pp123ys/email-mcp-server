@@ -16,10 +16,11 @@ from email_mcp.service.unsubscribe_service import UnsubscribeService
 
 @dataclass
 class AppContext:
-    """服务器运行时的共享依赖容器。"""
+    """服务器运行时的共享依赖容器。account 为 None 表示未配置（无凭据启动）。"""
 
-    account: Account
-    provider: EmailProvider
+    account: Account | None = None
+    provider: EmailProvider | None = None
+    configured: bool = field(default=False, init=False)
     email_service: EmailService | None = field(default=None, init=False)
     thread_service: ThreadService | None = field(default=None, init=False)
     unsubscribe_service: UnsubscribeService | None = field(default=None, init=False)
@@ -27,6 +28,15 @@ class AppContext:
     scheduler_store: SchedulerStore | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
+        self.configure()
+
+    def configure(self, account: Account | None = None) -> None:
+        """用账号配置（重）建服务；account 为 None 时用 self.account。配置失败则保持未配置状态。"""
+        if account is not None:
+            self.account = account
+        if self.account is None or self.provider is None:
+            self.configured = False
+            return
         # 用局部非 None 引用：字段是 Optional，mypy strict 下无法在回调中收窄
         scheduler_store = SchedulerStore(Path("data/scheduler.json"))
         self.scheduler_store = scheduler_store
@@ -57,3 +67,8 @@ class AppContext:
             send_fn=send,
             snooze_fn=snooze,
         )
+        self.configured = True
+
+    def reload(self, account: Account) -> None:
+        """配置工具热重载：用新账号重建服务。"""
+        self.configure(account)

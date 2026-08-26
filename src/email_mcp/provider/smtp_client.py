@@ -108,3 +108,20 @@ class SMTPClient:
             _safe_quit(server)
 
         return message["Message-ID"] or f"sent-{len(to)}@local"
+
+    def check(self) -> None:
+        """验证 SMTP 连接与登录（不发送邮件），供 test_email_connection 使用。"""
+        server = self._connect()
+        try:
+            server.login(self.account.username, self.account.auth_secret)
+        except smtplib.SMTPAuthenticationError as exc:
+            raise EmailMCPError(
+                ErrorCode.SMTP_AUTH_FAILED, "SMTP 认证失败，请检查账号密码或授权码"
+            ) from exc
+        except (smtplib.SMTPException, OSError) as exc:
+            raise EmailMCPError(
+                ErrorCode.SMTP_CONNECT_FAILED,
+                f"SMTP 连接中断 {self.account.smtp_host}:{self.account.smtp_port}",
+            ) from exc
+        finally:
+            _safe_quit(server)

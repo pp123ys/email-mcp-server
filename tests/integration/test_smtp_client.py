@@ -118,3 +118,21 @@ def test_send_message_id_is_real_wire_id(account):
     sent = conn.send_message.call_args.args[0]
     assert sent["Message-ID"] == mid
     assert mid.startswith("<") and mid.endswith(">")
+
+
+def test_check_logs_in_and_quits(account):
+    conn = MagicMock()
+    conn.login.return_value = (235, b"ok")
+    with patch("email_mcp.provider.smtp_client.smtplib.SMTP_SSL", return_value=conn):
+        SMTPClient(account).check()
+    conn.login.assert_called_once_with("me@test.local", "s3cret-not-in-logs")
+    conn.quit.assert_called_once()
+
+
+def test_check_auth_failure(account):
+    conn = MagicMock()
+    conn.login.side_effect = smtplib.SMTPAuthenticationError(535, b"bad")
+    with patch("email_mcp.provider.smtp_client.smtplib.SMTP_SSL", return_value=conn):
+        with pytest.raises(EmailMCPError) as ei:
+            SMTPClient(account).check()
+    assert ei.value.code == ErrorCode.SMTP_AUTH_FAILED

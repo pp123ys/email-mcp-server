@@ -5,13 +5,16 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 
 from email_mcp.context import AppContext
+from email_mcp.service.email_service import EmailService
+from email_mcp.tools._guard import guard
 
 
 def register(mcp: FastMCP, ctx: AppContext) -> None:
     """注册发送/草稿组工具。"""
-    # AppContext.__post_init__ 总会创建 EmailService；assert 收窄 Optional 字段以满足 mypy strict
-    assert ctx.email_service is not None
-    svc = ctx.email_service
+    # 服务在 configure_account 热重载时重建，须每次调用时从 ctx 取当前实例
+    def svc() -> EmailService:
+        assert ctx.email_service is not None
+        return ctx.email_service
 
     @mcp.tool(
         description=(
@@ -19,10 +22,11 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
             "如需人工确认请改用 save_draft 存草稿后手动发送"
         )
     )
+    @guard(ctx)
     def send_email(
         to: list[str], subject: str, body: str, cc: list[str] | None = None
     ) -> dict[str, Any]:
-        return svc.send_email(to=to, cc=cc, subject=subject, body=body)
+        return svc().send_email(to=to, cc=cc, subject=subject, body=body)
 
     @mcp.tool(
         description=(
@@ -30,11 +34,13 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
             "to 可为空（先起草后补收件人），cc 可选"
         )
     )
+    @guard(ctx)
     def save_draft(
         to: list[str], subject: str, body: str, cc: list[str] | None = None
     ) -> dict[str, Any]:
-        return svc.save_draft(to=to, cc=cc, subject=subject, body=body)
+        return svc().save_draft(to=to, cc=cc, subject=subject, body=body)
 
     @mcp.tool(description="列出草稿")
+    @guard(ctx)
     def list_drafts() -> dict[str, Any]:
-        return svc.list_drafts()
+        return svc().list_drafts()
