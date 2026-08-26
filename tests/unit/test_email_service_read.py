@@ -117,3 +117,87 @@ def test_download_attachment_success(account, provider):
     assert result["success"] is True
     assert result["data"]["part_id"] == "1"
     assert "content_base64" in result["data"]
+
+
+def test_get_email_headers_missing_returns_error(account, provider):
+    svc = make_service(account, provider)
+    result = svc.get_email_headers("INBOX:999")
+    assert result["success"] is False
+    assert result["error"]["code"] == ErrorCode.EMAIL_NOT_FOUND
+
+
+def test_get_attachments_missing_returns_error(account, provider):
+    svc = make_service(account, provider)
+    result = svc.get_attachments("INBOX:999")
+    assert result["success"] is False
+    assert result["error"]["code"] == ErrorCode.EMAIL_NOT_FOUND
+
+
+def test_list_inbox_total_pages(account, provider):
+    svc = make_service(account, provider)
+    data = svc.list_inbox(page=1, page_size=2)["data"]
+    assert data["total"] == 3
+    assert data["total_pages"] == 2  # ceil(3 / 2)
+
+
+def test_list_inbox_page_out_of_bounds(account, provider):
+    svc = make_service(account, provider)
+    data = svc.list_inbox(page=99, page_size=2)["data"]
+    assert data["items"] == []
+    assert data["total"] == 3  # total 来自 provider 全量计数，不随 page 改变
+    assert data["page"] == 99
+
+
+def test_list_inbox_non_inbox_folder(account, provider):
+    from tests.unit.fakes import make_message
+
+    provider.messages.append(make_message(uid=10, folder="Work", subject="work1"))
+    svc = make_service(account, provider)
+    data = svc.list_inbox(folder="Work", page=1, page_size=10)["data"]
+    assert data["folder"] == "Work"
+    assert [m["subject"] for m in data["items"]] == ["work1"]
+
+
+def test_search_emails_passes_filters(account, provider, monkeypatch):
+    captured: dict = {}
+
+    def fake_search(
+        self, account, *, query="", from_email=None, since=None, until=None, folder="INBOX"
+    ):
+        captured.update(
+            query=query, from_email=from_email, since=since, until=until, folder=folder
+        )
+        return []
+
+    monkeypatch.setattr(type(provider), "search", fake_search)
+    svc = make_service(account, provider)
+    result = svc.search_emails(
+        query="q", from_email="a@b.com", since="2026-01-01", until="2026-01-31"
+    )
+    assert result["success"] is True
+    assert result["data"] == []
+    assert captured == {
+        "query": "q",
+        "from_email": "a@b.com",
+        "since": "2026-01-01",
+        "until": "2026-01-31",
+        "folder": "INBOX",
+    }
+
+
+def test_download_attachment_missing_returns_error(account, provider):
+    svc = make_service(account, provider)
+    result = svc.download_attachment("INBOX:999", "1")
+    assert result["success"] is False
+    assert result["error"]["code"] == ErrorCode.EMAIL_NOT_FOUND
+
+
+def test_download_attachment_too_large(account, provider, monkeypatch):
+    def big(self, account, folder, uid, part_id):
+        return b"x" * (26 * 1024 * 1024)
+
+    monkeypatch.setattr(type(provider), "download_attachment", big)
+    svc = make_service(account, provider)
+    result = svc.download_attachment("INBOX:1", "1")
+    assert result["success"] is False
+    assert result["error"]["code"] == ErrorCode.EMAIL_TOO_LARGE

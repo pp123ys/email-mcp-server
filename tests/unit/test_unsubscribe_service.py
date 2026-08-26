@@ -71,3 +71,47 @@ def test_unsubscribe_send_error_preserves_code(account, provider, monkeypatch):
     svc = UnsubscribeService(provider, account)
     result = svc.unsubscribe("INBOX:1")
     assert result["error"]["code"] == ErrorCode.SMTP_AUTH_FAILED
+
+
+def test_unsubscribe_get_headers_error_preserves_code(account, provider, monkeypatch):
+    def boom(self, account, folder, uid):
+        raise EmailMCPError(ErrorCode.IMAP_AUTH_FAILED, "imap auth failed")
+
+    monkeypatch.setattr(type(provider), "get_headers", boom)
+    svc = UnsubscribeService(provider, account)
+    result = svc.unsubscribe("INBOX:1")
+    assert result["success"] is False
+    assert result["error"]["code"] == ErrorCode.IMAP_AUTH_FAILED
+
+
+def test_unsubscribe_get_headers_unexpected_exception_sealed(account, provider, monkeypatch):
+    def boom(self, account, folder, uid):
+        raise RuntimeError("imap boom")
+
+    monkeypatch.setattr(type(provider), "get_headers", boom)
+    svc = UnsubscribeService(provider, account)
+    result = svc.unsubscribe("INBOX:1")
+    assert result["success"] is False
+    assert result["error"]["code"] == ErrorCode.INTERNAL
+
+
+def test_unsubscribe_invalid_mailto_recipient(account, provider):
+    # mailto 不是合法邮箱 → validate_recipients 抛 INVALID_RECIPIENT，错误直传
+    provider.messages[0].headers = {"List-Unsubscribe": "<mailto:not-an-email>"}
+    svc = UnsubscribeService(provider, account)
+    result = svc.unsubscribe("INBOX:1")
+    assert result["success"] is False
+    assert result["error"]["code"] == ErrorCode.INVALID_RECIPIENT
+    assert provider.sent == []
+
+
+def test_unsubscribe_send_unexpected_exception_sealed(account, provider, monkeypatch):
+    def boom(self, account, *, to, cc=None, subject, body):
+        raise RuntimeError("smtp boom")
+
+    monkeypatch.setattr(type(provider), "send", boom)
+    provider.messages[0].headers = {"List-Unsubscribe": "<mailto:unsub@news.com>"}
+    svc = UnsubscribeService(provider, account)
+    result = svc.unsubscribe("INBOX:1")
+    assert result["success"] is False
+    assert result["error"]["code"] == ErrorCode.INTERNAL

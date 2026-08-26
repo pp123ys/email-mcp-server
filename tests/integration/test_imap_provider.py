@@ -170,3 +170,59 @@ def test_search_uses_uid_with_criteria(account):
     search_call = conn.uid.call_args_list[0].args
     assert search_call[0] == "SEARCH"
     assert "TEXT" in search_call
+
+
+def test_search_passes_since_until_criteria(account):
+    conn = MagicMock()
+    conn.select.return_value = ("OK", [b"1"])
+    conn.uid.return_value = ("OK", [b""])  # 无结果，只验证 criteria 组装
+    with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
+        provider = ImapProvider()
+        provider.search(
+            account,
+            query="",
+            from_email="a@x.com",
+            since="2026-01-01",
+            until="2026-01-31",
+            folder="INBOX",
+        )
+    search_call = conn.uid.call_args_list[0].args
+    assert search_call[0] == "SEARCH"
+    assert "FROM" in search_call
+    assert '"a@x.com"' in search_call
+    assert "SINCE" in search_call
+    assert "01-Jan-2026" in search_call
+    assert "BEFORE" in search_call
+    assert "31-Jan-2026" in search_call
+
+
+def test_list_folders_parses_list_response(account):
+    conn = MagicMock()
+    conn.list.return_value = (
+        "OK",
+        [
+            b'(\\HasNoChildren) "/" "INBOX"',
+            b'() "/" "Sent"',
+            b'(\\Noselect) "/" "[Gmail]/All Mail"',
+        ],
+    )
+    with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
+        provider = ImapProvider()
+        folders = provider.list_folders(account)
+    assert folders == ["INBOX", "Sent", "[Gmail]/All Mail"]
+
+
+def test_save_draft_appends_and_returns_drafts_id(account):
+    conn = MagicMock()
+    conn.select.return_value = ("OK", [b"1"])
+    conn.append.return_value = ("OK", [b"123"])
+    with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
+        provider = ImapProvider()
+        result = provider.save_draft(
+            account, to=["a@b.com"], subject="Draft", body="hi"
+        )
+    assert result == "Drafts:123"
+    append_args = conn.append.call_args.args
+    assert append_args[0] == "Drafts"
+    assert isinstance(append_args[3], bytes)
+    assert b"Subject: Draft" in append_args[3]

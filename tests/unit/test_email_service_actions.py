@@ -120,3 +120,30 @@ def test_mark_read_is_idempotent(account, provider):
     svc.mark_read("INBOX:2")
     flags = provider.get_message(account, "INBOX", "2").flags
     assert flags.count("\\Seen") == 1
+
+
+def test_forward_email_missing_message(account, provider):
+    svc = make_service(account, provider)
+    result = svc.forward_email("INBOX:999", to=["f@b.com"], body="FYI")
+    assert result["success"] is False
+    assert result["error"]["code"] == "EMAIL_NOT_FOUND"
+    assert provider.sent == []
+
+
+def test_snooze_email_invalid_until(account, provider, tmp_path):
+    from email_mcp.service.scheduler import SchedulerStore
+
+    store = SchedulerStore(tmp_path / "sched.json")
+    svc = EmailService(provider=provider, account=account, scheduler_store=store)
+    result = svc.snooze_email("INBOX:1", "not-a-date")
+    assert result["success"] is False
+    assert result["error"]["code"] == "CONFIG_INVALID"
+    assert store.load()["snoozes"] == []
+
+
+def test_set_flag_rejects_illegal_char_in_keyword_flag(account, provider):
+    # $ 开头关键字通过第一层校验，触发非法字符分支
+    svc = make_service(account, provider)
+    result = svc.set_flag("INBOX:1", flag="$custom)flag")
+    assert result["success"] is False
+    assert result["error"]["code"] == "CONFIG_INVALID"

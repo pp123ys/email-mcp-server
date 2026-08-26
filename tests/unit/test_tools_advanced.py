@@ -53,3 +53,14 @@ async def test_create_label_tool(account, provider):
     mcp = build_server(AppContext(account=account, provider=provider))
     result = await mcp.call_tool("create_label", {"name": "Work"})
     assert "Work" in str(result)
+
+
+@pytest.mark.asyncio
+async def test_manage_labels_tool(account, provider):
+    mcp = build_server(AppContext(account=account, provider=provider))
+    result = await mcp.call_tool("manage_labels", {"action": "list"})
+    assert "INBOX" in str(result)
+    result = await mcp.call_tool(
+        "manage_labels", {"action": "delete", "name": "Missing"}
+    )
+    assert "deleted" in str(result)

@@ -52,3 +52,26 @@ async def test_list_folders_tool(account, provider):
     mcp = build_server(AppContext(account=account, provider=provider))
     result = await mcp.call_tool("list_folders", {})
     assert "INBOX" in str(result)
+
+
+@pytest.mark.asyncio
+async def test_get_thread_tool(account, provider):
+    mcp = build_server(AppContext(account=account, provider=provider))
+    result = await mcp.call_tool("get_thread", {"email_id": "INBOX:1"})
+    assert "s1" in str(result)
+
+
+@pytest.mark.asyncio
+async def test_get_attachments_tool(account, provider):
+    mcp = build_server(AppContext(account=account, provider=provider))
+    result = await mcp.call_tool("get_attachments", {"email_id": "INBOX:1"})
+    assert "attachments" in str(result)
+
+
+@pytest.mark.asyncio
+async def test_download_attachment_tool(account, provider):
+    mcp = build_server(AppContext(account=account, provider=provider))
+    result = await mcp.call_tool(
+        "download_attachment", {"email_id": "INBOX:1", "part_id": "1"}
+    )
+    assert "content_base64" in str(result)

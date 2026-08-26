@@ -72,6 +72,13 @@ def test_manage_labels_invalid_action(account, provider):
     assert result["error"]["code"] == "CONFIG_INVALID"
 
 
+def test_manage_labels_delete_without_name(account, provider):
+    svc = make_service(account, provider)
+    result = svc.manage_labels(action="delete")
+    assert result["success"] is False
+    assert result["error"]["code"] == "CONFIG_INVALID"
+
+
 def test_batch_send_invalid_recipient(account, provider):
     svc = make_service(account, provider)
     result = svc.batch_send(to=["bad-addr"], subject="Hi", body="Hello")
