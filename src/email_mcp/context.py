@@ -34,13 +34,19 @@ class AppContext:
         self.unsubscribe_service = UnsubscribeService(self.provider, self.account)
 
         def send(item: dict[str, Any]) -> None:
-            email_service.send_email(
+            result = email_service.send_email(
                 to=item["to"], subject=item["subject"], body=item["body"]
             )
+            # send_email 把错误包成 {success: False} dict 而非抛异常；
+            # 不在此抛异常的话 Scheduler.process_due 会把失败项误删
+            if not result["success"]:
+                raise RuntimeError(result["error"]["message"])
 
         def snooze(item: dict[str, Any]) -> None:
             # EmailService.mark_unread 由 Task 20 补充，此处为预期的临时忽略
-            email_service.mark_unread(item["email_id"])  # type: ignore[attr-defined]
+            result = email_service.mark_unread(item["email_id"])  # type: ignore[attr-defined]
+            if not result["success"]:
+                raise RuntimeError(result["error"]["message"])
 
         self.scheduler = Scheduler(
             scheduler_store,

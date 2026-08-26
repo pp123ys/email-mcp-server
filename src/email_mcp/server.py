@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import argparse
+import logging
 
 from mcp.server.fastmcp import FastMCP
 
-from email_mcp.config import load_account
+from email_mcp.config import http_token, load_account
 from email_mcp.context import AppContext
 from email_mcp.provider.imap_provider import ImapProvider
 from email_mcp.tools import action_tools, advanced_tools, read_tools, send_tools
+
+logger = logging.getLogger(__name__)
 
 
 def build_server(ctx: AppContext, *, host: str = "127.0.0.1", port: int = 8080) -> FastMCP:
@@ -38,11 +41,15 @@ def main() -> None:
     scheduler.start()
     try:
         if args.http:
+            token = http_token()
+            if token:
+                logger.warning(
+                    "EMAIL_HTTP_TOKEN 已设置，但当前 mcp 版本不支持静态 Bearer 认证，"
+                    "该 token 不会被校验；请仅在受信任的本地/反向代理环境暴露此服务"
+                )
             # mcp 1.29.1 的 FastMCP.run() 只接受 transport/mount_path：
             # - HTTP 传输的合法取值是 "streamable-http"（"http" 会抛 ValueError）
             # - host/port 已在 build_server 构造 FastMCP 时传入
-            # - 1.29.1 无 auth_token 参数（无静态 Bearer token 支持；
-            #   服务只绑定 127.0.0.1，需要认证时由反向代理层处理）
             mcp.run(transport="streamable-http")
         else:
             mcp.run(transport="stdio")

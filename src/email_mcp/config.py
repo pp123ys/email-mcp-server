@@ -64,5 +64,5 @@ def send_rate_limit() -> int:
 
 
 def http_token() -> str | None:
-    """HTTP 模式 Bearer token；为空则只监听 localhost。"""
+    """HTTP 模式预留的 Bearer token；当前 mcp 1.29.1 不支持静态认证，设置后仅产生警告。"""
     return os.getenv("EMAIL_HTTP_TOKEN") or None
