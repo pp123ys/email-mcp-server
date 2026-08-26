@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import email.utils
 import smtplib
 from email.message import EmailMessage
 
@@ -39,6 +40,7 @@ class SMTPClient:
             message["Cc"] = ", ".join(cc)
         message["Subject"] = subject
         message.set_content(body)
+        message["Message-ID"] = email.utils.make_msgid(domain=self.account.smtp_host)
 
         server: smtplib.SMTP
         try:
@@ -64,13 +66,19 @@ class SMTPClient:
             raise EmailMCPError(
                 ErrorCode.SMTP_AUTH_FAILED, "SMTP 认证失败，请检查账号密码或授权码"
             ) from exc
+        except smtplib.SMTPRecipientsRefused as exc:
+            raise EmailMCPError(
+                ErrorCode.INVALID_RECIPIENT,
+                "SMTP 服务器拒绝了部分收件人",
+                {"refused": {addr: str(resp) for addr, resp in exc.recipients.items()}},
+            ) from exc
+        except smtplib.SMTPException as exc:
+            raise EmailMCPError(ErrorCode.INTERNAL, f"SMTP 发送失败: {exc}") from exc
         except OSError as exc:
             raise EmailMCPError(
                 ErrorCode.SMTP_CONNECT_FAILED,
                 f"SMTP 发送过程中连接中断 {self.account.smtp_host}:{self.account.smtp_port}",
             ) from exc
-        except smtplib.SMTPException as exc:
-            raise EmailMCPError(ErrorCode.INTERNAL, f"SMTP 发送失败: {exc}") from exc
         finally:
             _safe_quit(server)
 
