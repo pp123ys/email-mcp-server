@@ -142,3 +142,53 @@ class EmailService:
                 "auth_mode": self.account.auth_mode,
             }
         return self._wrap(run)
+
+    # ---- 发送与草稿 ----
+
+    def _validate_recipients(self, to: list[str], cc: list[str] | None = None) -> None:
+        from email_validator import EmailNotValidError, validate_email
+
+        bad: list[str] = []
+        for addr in list(to) + list(cc or []):
+            try:
+                validate_email(addr, check_deliverability=False)
+            except EmailNotValidError:
+                bad.append(addr)
+        if bad:
+            raise EmailMCPError(ErrorCode.INVALID_RECIPIENT, f"非法收件人: {bad}")
+
+    def send_email(
+        self,
+        to: list[str],
+        subject: str,
+        body: str,
+        cc: list[str] | None = None,
+    ) -> dict[str, Any]:
+        def run() -> dict[str, Any]:
+            self._validate_recipients(to, cc)
+            message_id = self.provider.send(
+                self.account, to=to, cc=cc, subject=subject, body=body
+            )
+            return {"message_id": message_id}
+        return self._wrap(run)
+
+    def save_draft(
+        self,
+        to: list[str],
+        subject: str,
+        body: str,
+        cc: list[str] | None = None,
+    ) -> dict[str, Any]:
+        def run() -> dict[str, Any]:
+            self._validate_recipients(to, cc)
+            draft_id = self.provider.save_draft(
+                self.account, to=to, cc=cc, subject=subject, body=body
+            )
+            return {"draft_id": draft_id}
+        return self._wrap(run)
+
+    def list_drafts(self) -> dict[str, Any]:
+        def run() -> list[dict[str, Any]]:
+            drafts = self.provider.list_drafts(self.account)
+            return [m.model_dump(mode="json") for m in drafts]
+        return self._wrap(run)
