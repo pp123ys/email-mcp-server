@@ -36,7 +36,7 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
     @mcp.tool(
         description=(
             "同模板批量发送（每批最多 20 封，受发送频率限制）；"
-            "to 不能为空"
+            "to 不能为空，空 to 拒绝"
         )
     )
     def batch_send(to: list[str], subject: str, body: str) -> dict[str, Any]:

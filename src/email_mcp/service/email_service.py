@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
+from uuid import uuid4
 
 from email_mcp.errors import EmailMCPError, ErrorCode, error_result
 from email_mcp.models import Account
 from email_mcp.provider.base import EmailProvider
-from email_mcp.service.guardrails import RateLimiter
+from email_mcp.service.guardrails import RateLimiter, check_batch_size
 from email_mcp.service.ids import parse_email_id
 from email_mcp.service.pagination import page_meta
 from email_mcp.service.quoting import build_quote_block
@@ -42,7 +44,6 @@ class EmailService:
     ):
         self.provider = provider
         self.account = account
-        # Task 20/21 的 snooze/定时发送工具将使用 scheduler_store
         self.scheduler_store = scheduler_store
         self.rate_limiter = rate_limiter
 
@@ -302,15 +303,12 @@ class EmailService:
         def run() -> dict[str, Any]:
             if self.scheduler_store is None:
                 raise EmailMCPError(ErrorCode.CONFIG_MISSING, "调度器未初始化")
-            from datetime import datetime
-
             try:
                 datetime.fromisoformat(until)
             except ValueError:
                 raise EmailMCPError(
                     ErrorCode.CONFIG_INVALID, f"until 必须是 ISO 时间格式，收到 {until!r}"
                 ) from None
-            from uuid import uuid4
 
             self.scheduler_store.add_snooze(
                 {"id": str(uuid4()), "until": until, "email_id": email_id}
@@ -322,14 +320,14 @@ class EmailService:
 
     def batch_send(self, to: list[str], subject: str, body: str) -> dict[str, Any]:
         def run() -> dict[str, Any]:
-            from email_mcp.service.guardrails import check_batch_size
-
             check_batch_size(to)
+            if not to:
+                raise EmailMCPError(ErrorCode.INVALID_RECIPIENT, "收件人列表不能为空")
             validate_recipients(to)
+            if self.rate_limiter is not None:
+                self.rate_limiter.acquire(len(to))  # 全量预检：不足则整批拒绝
             message_ids = []
             for addr in to:
-                if self.rate_limiter is not None:
-                    self.rate_limiter.check()
                 mid = self.provider.send(
                     self.account, to=[addr], cc=None, subject=subject, body=body
                 )
@@ -343,10 +341,9 @@ class EmailService:
         def run() -> dict[str, Any]:
             if self.scheduler_store is None:
                 raise EmailMCPError(ErrorCode.CONFIG_MISSING, "调度器未初始化")
+            if not to:
+                raise EmailMCPError(ErrorCode.INVALID_RECIPIENT, "收件人列表不能为空")
             validate_recipients(to)
-            from datetime import datetime
-            from uuid import uuid4
-
             try:
                 datetime.fromisoformat(send_at)
             except ValueError:

@@ -51,3 +51,15 @@ def test_rate_limiter_rejection_does_not_consume(monkeypatch):
     clock["now"] += 1
     with pytest.raises(EmailMCPError):
         rl.check()  # 仍被拒绝（拒绝未消耗配额，配额仍满）
+
+
+def test_rate_limiter_acquire_all_or_nothing(monkeypatch):
+    clock = {"now": 1000.0}
+    monkeypatch.setattr("email_mcp.service.guardrails.time.monotonic", lambda: clock["now"])
+    rl = RateLimiter(max_per_minute=2)
+    rl.acquire(2)  # 预留成功
+    with pytest.raises(EmailMCPError) as ei:
+        rl.acquire(1)  # 配额不足，整体拒绝
+    assert ei.value.code == ErrorCode.RATE_LIMITED
+    clock["now"] += 61  # 窗口过期
+    rl.acquire(2)  # 拒绝未消耗配额，可再次预留

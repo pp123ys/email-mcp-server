@@ -35,3 +35,20 @@ class RateLimiter:
                     f"发送频率超限：每分钟最多 {self.max_per_minute} 封",
                 )
             self._timestamps.append(now)
+
+    def acquire(self, count: int) -> None:
+        """一次预留 count 个发送配额；配额不足抛 RATE_LIMITED（不消耗任何配额）。
+
+        用于批量发送的全量预检：要么整批通过，要么整批拒绝。
+        """
+        with self._lock:
+            now = time.monotonic()
+            self._timestamps = [t for t in self._timestamps if now - t < 60]
+            available = self.max_per_minute - len(self._timestamps)
+            if count > available:
+                raise EmailMCPError(
+                    ErrorCode.RATE_LIMITED,
+                    f"发送频率超限：每分钟最多 {self.max_per_minute} 封，本次需要 {count} 封，"
+                    f"剩余配额 {available}",
+                )
+            self._timestamps.extend([now] * count)
