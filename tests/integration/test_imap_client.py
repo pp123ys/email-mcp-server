@@ -36,3 +36,25 @@ def test_auth_failure_raises_auth_error(account):
                 pass
     assert ei.value.code == ErrorCode.IMAP_AUTH_FAILED
     conn.logout.assert_called_once()
+
+
+def test_yield_body_exception_still_logs_out_and_propagates(account):
+    conn = MagicMock()
+    conn.login.return_value = ("OK", [b"logged in"])
+    with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
+        client = IMAPClient(account)
+        with pytest.raises(RuntimeError, match="boom"):
+            with client.connect():
+                raise RuntimeError("boom")
+    conn.logout.assert_called_once()
+
+
+def test_login_oserror_maps_to_connect_failed(account):
+    conn = MagicMock()
+    conn.login.side_effect = OSError("connection reset during login")
+    with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
+        with pytest.raises(EmailMCPError) as ei:
+            with IMAPClient(account).connect():
+                pass
+    assert ei.value.code == ErrorCode.IMAP_CONNECT_FAILED
+    conn.logout.assert_called_once()

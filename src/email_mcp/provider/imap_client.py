@@ -10,6 +10,13 @@ from email_mcp.models import Account
 DEFAULT_TIMEOUT = 15.0
 
 
+def _safe_logout(conn: imaplib.IMAP4) -> None:
+    try:
+        conn.logout()
+    except Exception:
+        pass
+
+
 class IMAPClient:
     """IMAP 连接管理：SSL 连接、登录、超时、错误映射。"""
 
@@ -37,14 +44,17 @@ class IMAPClient:
         try:
             conn.login(self.account.username, self.account.auth_secret)
         except imaplib.IMAP4.error as exc:
-            conn.logout()
+            _safe_logout(conn)
             raise EmailMCPError(
                 ErrorCode.IMAP_AUTH_FAILED, "IMAP 认证失败，请检查账号密码或授权码"
+            ) from exc
+        except OSError as exc:
+            _safe_logout(conn)
+            raise EmailMCPError(
+                ErrorCode.IMAP_CONNECT_FAILED,
+                f"IMAP 登录过程中连接中断 {self.account.imap_host}:{self.account.imap_port}",
             ) from exc
         try:
             yield conn
         finally:
-            try:
-                conn.logout()
-            except Exception:
-                pass
+            _safe_logout(conn)
