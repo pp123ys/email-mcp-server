@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from enum import StrEnum
 from typing import Any
 
@@ -41,8 +42,15 @@ class EmailMCPError(Exception):
         self.details = details or {}
 
     @classmethod
-    def from_exception(cls, exc: Exception) -> "EmailMCPError":
-        return cls(ErrorCode.INTERNAL, f"内部错误: {exc}")
+    def from_exception(
+        cls, exc: Exception, secrets: Iterable[str] | None = None
+    ) -> "EmailMCPError":
+        message = f"内部错误: {exc}"
+        if secrets:
+            from email_mcp.security.redactor import redact
+
+            message = redact(message, secrets)
+        return cls(ErrorCode.INTERNAL, message)
 
 
 def error_result(

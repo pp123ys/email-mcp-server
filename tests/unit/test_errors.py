@@ -29,3 +29,14 @@ def test_error_result_with_details():
 def test_unhandled_exception_wraps_to_internal():
     result = EmailMCPError.from_exception(RuntimeError("boom"))
     assert result.code == ErrorCode.INTERNAL
+
+
+def test_from_exception_redacts_secret():
+    err = EmailMCPError.from_exception(RuntimeError("password hunter2 leaked"), ["hunter2"])
+    assert "hunter2" not in str(err)
+    assert "***" in str(err)
+
+
+def test_from_exception_without_secrets_unchanged():
+    err = EmailMCPError.from_exception(RuntimeError("boom"))
+    assert str(err) == "内部错误: boom"
