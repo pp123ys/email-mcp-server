@@ -53,7 +53,7 @@ class UnsubscribeService:
         except EmailMCPError as e:
             return error_result(e.code, e.message, e.details)
         except Exception as exc:  # 兜底：provider 异常收敛为 INTERNAL
-            sealed = EmailMCPError.from_exception(exc)
+            sealed = EmailMCPError.from_exception(exc, secrets=[self.account.auth_secret])
             return error_result(sealed.code, sealed.message)
 
         info = parse_list_unsubscribe(self._find_header(headers, "List-Unsubscribe"))
@@ -76,6 +76,6 @@ class UnsubscribeService:
         except EmailMCPError as e:
             return error_result(e.code, e.message, e.details)
         except Exception as exc:  # 兜底
-            sealed = EmailMCPError.from_exception(exc)
+            sealed = EmailMCPError.from_exception(exc, secrets=[self.account.auth_secret])
             return error_result(sealed.code, sealed.message)
         return {"success": True, "data": {"unsubscribed_to": info["mailto"]}}

@@ -31,7 +31,7 @@ class EmailService:
         except EmailMCPError as e:
             return error_result(e.code, e.message, e.details)
         except Exception as exc:  # 兜底：任何未预期异常都收敛为 INTERNAL
-            sealed = EmailMCPError.from_exception(exc)
+            sealed = EmailMCPError.from_exception(exc, secrets=[self.account.auth_secret])
             return error_result(sealed.code, sealed.message)
 
     # ---- 读取组 ----

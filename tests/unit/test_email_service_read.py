@@ -78,3 +78,15 @@ def test_unexpected_exception_sealed_as_internal(account, provider, monkeypatch)
     result = svc.list_inbox(page=1, page_size=10)
     assert result["success"] is False
     assert result["error"]["code"] == ErrorCode.INTERNAL
+
+
+def test_wrap_redacts_account_secret(account, provider, monkeypatch):
+    def boom(self, account, folder, *, page, page_size, unread_only=False, from_email=None):
+        raise RuntimeError(f"leaked {account.auth_secret} in imap error")
+
+    monkeypatch.setattr(type(provider), "list_messages", boom)
+    svc = make_service(account, provider)
+    result = svc.list_inbox(page=1, page_size=10)
+    assert result["success"] is False
+    assert "s3cret-not-in-logs" not in str(result)
+    assert "***" in str(result)

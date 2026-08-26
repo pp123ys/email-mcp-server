@@ -25,11 +25,11 @@ class ThreadService:
         except KeyError:
             return error_result(ErrorCode.EMAIL_NOT_FOUND, f"未找到邮件 {email_id}")
         except Exception as exc:  # 兜底：provider 异常收敛为 INTERNAL
-            sealed = EmailMCPError.from_exception(exc)
+            sealed = EmailMCPError.from_exception(exc, secrets=[self.account.auth_secret])
             return error_result(sealed.code, sealed.message)
         try:
             thread = self.provider.get_thread(self.account, seed.message_id)
         except Exception as exc:
-            sealed = EmailMCPError.from_exception(exc)
+            sealed = EmailMCPError.from_exception(exc, secrets=[self.account.auth_secret])
             return error_result(sealed.code, sealed.message)
         return {"success": True, "data": [m.model_dump(mode="json") for m in thread]}
