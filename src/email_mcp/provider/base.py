@@ -39,7 +39,8 @@ class EmailProvider(Protocol):
         ...
 
     def get_thread(self, account: Account, message_id: str) -> list[EmailMessage]:
-        """按 Message-ID 拉取整条会话线程（在 INBOX 与 Sent 中搜索）。"""
+        """按 Message-ID 拉取整条会话线程（种子 + In-Reply-To/References 祖先链
+        + 指向种子的后代，递归收集，去重后按日期排序）。"""
         ...
 
     def search(

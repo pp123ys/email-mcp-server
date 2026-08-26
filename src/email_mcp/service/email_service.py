@@ -6,6 +6,7 @@ from typing import Any
 from email_mcp.errors import EmailMCPError, ErrorCode, error_result
 from email_mcp.models import Account
 from email_mcp.provider.base import EmailProvider
+from email_mcp.service.ids import parse_email_id
 from email_mcp.service.pagination import page_meta
 from email_mcp.service.validators import validate_recipients
 
@@ -21,14 +22,7 @@ class EmailService:
 
     def _parse_email_id(self, email_id: str) -> tuple[str, str]:
         """邮件 ID 格式 'folder:uid'，按最后一个冒号切分。"""
-        if ":" not in email_id:
-            raise EmailMCPError(
-                ErrorCode.CONFIG_INVALID, f"email_id 格式应为 folder:uid，收到 {email_id!r}"
-            )
-        folder, uid = email_id.rsplit(":", 1)
-        if not folder or not uid:
-            raise EmailMCPError(ErrorCode.CONFIG_INVALID, f"email_id 格式不合法: {email_id!r}")
-        return folder, uid
+        return parse_email_id(email_id)
 
     def _wrap(self, fn: Callable[[], Any]) -> dict[str, Any]:
         """把业务调用包成 {success: True, data} / {success: False, error}。"""

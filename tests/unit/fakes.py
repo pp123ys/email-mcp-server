@@ -16,6 +16,7 @@ def make_message(
     read: bool = True,
     from_addr: str = "sender@x.com",
     message_id: str = "",
+    in_reply_to: str | None = None,
 ) -> EmailMessage:
     return EmailMessage(
         id=f"{folder}:{uid}",
@@ -28,6 +29,7 @@ def make_message(
         flags=[_SEEN] if read else [],
         body=body,
         message_id=message_id or f"msg-{uid}@x.com",
+        in_reply_to=in_reply_to,
     )
 
 
@@ -58,7 +60,21 @@ class FakeProvider:
         raise KeyError(f"message {folder}:{uid} not found")
 
     def get_thread(self, account, message_id):
-        return [m for m in self.messages if m.message_id == message_id]
+        by_id = {m.message_id: m for m in self.messages if m.message_id}
+        collected: dict[str, EmailMessage] = {}
+        stack = [message_id]
+        while stack:
+            mid = stack.pop()
+            if not mid or mid in collected or mid not in by_id:
+                continue
+            m = by_id[mid]
+            collected[mid] = m
+            if m.in_reply_to:
+                stack.append(m.in_reply_to)
+            for other in self.messages:
+                if other.in_reply_to == mid:
+                    stack.append(other.message_id)
+        return sorted(collected.values(), key=lambda m: m.date)
 
     def search(self, account, *, query="", from_email=None, since=None, until=None, folder="INBOX"):
         items = [m for m in self.messages if m.folder == folder]
