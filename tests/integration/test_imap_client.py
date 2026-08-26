@@ -1,4 +1,5 @@
 import imaplib
+import socket
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -20,11 +21,27 @@ def test_connect_logs_in_and_out(account):
 
 
 def test_connect_failure_raises_connect_error(account):
-    with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", side_effect=OSError("no route")):
+    with patch(
+        "email_mcp.provider.imap_client.imaplib.IMAP4_SSL",
+        side_effect=OSError("no route"),
+    ) as cls:
         with pytest.raises(EmailMCPError) as ei:
-            with IMAPClient(account).connect():
+            with IMAPClient(account, retry_delay_base=0).connect():
                 pass
     assert ei.value.code == ErrorCode.IMAP_CONNECT_FAILED
+    assert cls.call_count == 3  # 首次尝试 + 2 次重试
+
+
+def test_connect_timeout_maps_to_connection_timeout(account):
+    with patch(
+        "email_mcp.provider.imap_client.imaplib.IMAP4_SSL",
+        side_effect=socket.timeout("timed out"),
+    ) as cls:
+        with pytest.raises(EmailMCPError) as ei:
+            with IMAPClient(account, retry_delay_base=0).connect():
+                pass
+    assert ei.value.code == ErrorCode.CONNECTION_TIMEOUT
+    assert cls.call_count == 3
 
 
 def test_auth_failure_raises_auth_error(account):

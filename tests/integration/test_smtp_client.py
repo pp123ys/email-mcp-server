@@ -1,4 +1,5 @@
 import smtplib
+import socket
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -23,6 +24,19 @@ def test_send_message(account):
         sent = conn.send_message.call_args.args[0]
         assert sent["Subject"] == "Hi"
         assert sent["To"] == "a@b.com, c@d.com"
+
+
+def test_send_timeout_maps_to_connection_timeout(account):
+    with patch(
+        "email_mcp.provider.smtp_client.smtplib.SMTP_SSL",
+        side_effect=socket.timeout("timed out"),
+    ) as cls:
+        with pytest.raises(EmailMCPError) as ei:
+            SMTPClient(account, retry_delay_base=0).send(
+                to=["a@b.com"], cc=None, subject="s", body="b", sender=account.username
+            )
+    assert ei.value.code == ErrorCode.CONNECTION_TIMEOUT
+    assert cls.call_count == 3  # 首次尝试 + 2 次重试
 
 
 def test_auth_failure_raises(account):
