@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from email_mcp.config import load_account
+from email_mcp.config import http_token, load_account, send_rate_limit
 from email_mcp.errors import EmailMCPError, ErrorCode
 
 
@@ -46,3 +46,25 @@ def test_invalid_auth_mode_raises(tmp_path):
     with pytest.raises(EmailMCPError) as ei:
         load_account(str(env))
     assert ei.value.code == ErrorCode.CONFIG_INVALID
+
+
+def test_invalid_port_raises(tmp_path):
+    env = tmp_path / ".env"
+    env.write_text(
+        "EMAIL_IMAP_HOST=imap\nEMAIL_SMTP_HOST=smtp\nEMAIL_USERNAME=u@x.com\n"
+        "EMAIL_AUTH_SECRET=s\nEMAIL_IMAP_PORT=abc\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(EmailMCPError) as ei:
+        load_account(str(env))
+    assert ei.value.code == ErrorCode.CONFIG_INVALID
+
+
+def test_send_rate_limit_invalid_returns_default(monkeypatch):
+    monkeypatch.setenv("EMAIL_SEND_RATE_LIMIT", "not-a-number")
+    assert send_rate_limit() == 10
+
+
+def test_http_token_empty_returns_none(monkeypatch):
+    monkeypatch.setenv("EMAIL_HTTP_TOKEN", "")
+    assert http_token() is None
