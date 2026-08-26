@@ -100,7 +100,12 @@ class FakeProvider:
 
     def get_headers(self, account, folder, uid):
         m = self.get_message(account, folder, uid)
-        return {"Subject": m.subject, "From": m.from_.email, "Message-ID": m.message_id}
+        return {
+            "Subject": m.subject,
+            "From": m.from_.email,
+            "Message-ID": m.message_id,
+            **m.headers,  # 消息级 headers 优先（如 List-Unsubscribe）
+        }
 
     def save_draft(self, account, *, to, cc=None, subject, body):
         draft = make_message(
