@@ -123,7 +123,9 @@ class FakeProvider:
         return f"sent-{len(self.sent)}@x.com"
 
     def mark_read(self, account, folder, uid):
-        self.get_message(account, folder, uid).flags.append(_SEEN)
+        m = self.get_message(account, folder, uid)
+        if _SEEN not in m.flags:
+            m.flags.append(_SEEN)
 
     def mark_unread(self, account, folder, uid):
         m = self.get_message(account, folder, uid)

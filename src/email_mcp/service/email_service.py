@@ -8,17 +8,23 @@ from email_mcp.models import Account
 from email_mcp.provider.base import EmailProvider
 from email_mcp.service.ids import parse_email_id
 from email_mcp.service.pagination import page_meta
+from email_mcp.service.quoting import build_quote_block
 from email_mcp.service.scheduler import SchedulerStore
 from email_mcp.service.validators import validate_recipients
 
+_ALLOWED_FLAGS = frozenset({"\\Flagged", "\\Seen", "\\Answered", "\\Draft", "\\Deleted"})
 
-def build_quote_block(sender: str, date_str: str, original_body: str) -> str:
-    """生成 'On ... wrote:' 风格引用块。"""
-    lines = []
-    for line in (original_body or "").splitlines():
-        lines.append(f"> {line}")
-    header = f"On {date_str} {sender} wrote:"
-    return header + "\n" + "\n".join(lines)
+
+def _validate_flag(flag: str) -> None:
+    """校验 IMAP 标记；只允许系统标记或 $ 开头的关键字标记。"""
+    if flag not in _ALLOWED_FLAGS and not flag.startswith("$"):
+        raise EmailMCPError(
+            ErrorCode.CONFIG_INVALID,
+            (
+                f"不支持的邮件标记: {flag!r}"
+                "（允许 \\Flagged/\\Seen/\\Answered/\\Draft/\\Deleted 或 $ 开头关键字）"
+            ),
+        )
 
 
 class EmailService:
@@ -217,7 +223,7 @@ class EmailService:
                 self.account, to=[original.from_.email], cc=cc,
                 subject=f"Re: {original.subject}", body=full_body,
             )
-            return {"message_id": message_id, "in_reply_to": original.id}
+            return {"message_id": message_id, "original_email_id": original.id}
         return self._wrap(run)
 
     def forward_email(self, email_id: str, to: list[str], body: str) -> dict[str, Any]:
@@ -278,6 +284,7 @@ class EmailService:
 
     def set_flag(self, email_id: str, flag: str = "\\Flagged") -> dict[str, Any]:
         def run() -> dict[str, Any]:
+            _validate_flag(flag)
             folder, uid = self._parse_email_id(email_id)
             self.provider.set_flag(self.account, folder, uid, flag)
             return {"email_id": email_id, "flag": flag}
@@ -290,8 +297,10 @@ class EmailService:
         def run() -> dict[str, Any]:
             if self.scheduler_store is None:
                 raise EmailMCPError(ErrorCode.CONFIG_MISSING, "调度器未初始化")
+            from uuid import uuid4
+
             self.scheduler_store.add_snooze(
-                {"id": email_id, "until": until, "email_id": email_id}
+                {"id": str(uuid4()), "until": until, "email_id": email_id}
             )
             return {"email_id": email_id, "snoozed_until": until}
         return self._wrap(run)
