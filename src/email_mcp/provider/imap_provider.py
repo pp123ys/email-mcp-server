@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import email
+import re
 from datetime import datetime
 from email import policy
 
@@ -121,6 +122,11 @@ class ImapProvider:
                                     results[key] = msg
                                     if msg.message_id:
                                         frontier.append(msg.message_id)
+                                    if msg.in_reply_to:
+                                        frontier.append(msg.in_reply_to)
+                                    refs = msg.headers.get("References")
+                                    if refs:
+                                        frontier.extend(re.findall(r"<[^>]+>", refs))
             return sorted(results.values(), key=lambda m: m.date)
 
     def search(

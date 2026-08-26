@@ -91,3 +91,42 @@ def test_download_attachment_returns_payload(account):
         provider = ImapProvider()
         content = provider.download_attachment(account, "INBOX", "1", "2")
     assert content == b"hello"
+
+
+def test_get_thread_resolves_ancestors_from_reply_seed(account):
+    raw_root = (
+        b"From: a@x.com\r\nTo: me@x.com\r\nSubject: root\r\nMessage-ID: <r@x.com>\r\n"
+        b"Date: Thu, 01 Jan 2026 10:00:00 +0000\r\n"
+        b"Content-Type: text/plain; charset=utf-8\r\n\r\nroot"
+    )
+    raw_reply = (
+        b"From: b@x.com\r\nTo: me@x.com\r\nSubject: Re: root\r\nMessage-ID: <p@x.com>\r\n"
+        b"In-Reply-To: <r@x.com>\r\nDate: Thu, 01 Jan 2026 11:00:00 +0000\r\n"
+        b"Content-Type: text/plain; charset=utf-8\r\n\r\nreply"
+    )
+    by_uid = {b"1": raw_root, b"2": raw_reply}
+    conn = MagicMock()
+    conn.select.return_value = ("OK", [b"2"])
+
+    def fake_search(*args):
+        quoted = args[-1] if args else ""
+        mid = quoted.strip('"')
+        if mid == "<p@x.com>":
+            return ("OK", [b"2"])  # 种子（回复）的 Message-ID
+        if mid == "<r@x.com>":
+            return ("OK", [b"1"])  # 祖先的 Message-ID
+        return ("OK", [b""])
+
+    def fake_fetch(uid, *args):
+        raw = by_uid.get(uid)
+        if raw is None:
+            return ("OK", [b""])
+        return ("OK", [(uid, raw, b")")])
+
+    conn.search.side_effect = fake_search
+    conn.fetch.side_effect = fake_fetch
+    with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
+        provider = ImapProvider()
+        thread = provider.get_thread(account, "<p@x.com>")  # 种子是回复
+    ids = {m.message_id for m in thread}
+    assert ids == {"<r@x.com>", "<p@x.com>"}
