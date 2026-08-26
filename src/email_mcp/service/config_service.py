@@ -90,16 +90,16 @@ class ConfigService:
         auth_mode_value = cast(Literal["app_password", "password"], auth_mode)
         try:
             account = Account(
-                imap_host=imap_host,
+                imap_host=imap_host.strip(),
                 imap_port=imap_port,
                 imap_ssl=imap_ssl,
-                smtp_host=smtp_host,
+                smtp_host=smtp_host.strip(),
                 smtp_port=smtp_port,
                 smtp_ssl=smtp_ssl,
-                username=username,
+                username=username.strip(),
                 auth_mode=auth_mode_value,
-                auth_secret=auth_secret,
-                sent_folder=sent_folder,
+                auth_secret=auth_secret.strip(),
+                sent_folder=sent_folder.strip(),
             )
         except pydantic.ValidationError as exc:
             return error_result(

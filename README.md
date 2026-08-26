@@ -12,6 +12,23 @@
 2. `uv run email-mcp`（stdio 模式）或 `uv run email-mcp --http`（Streamable HTTP）
 3. 在 Claude Desktop / Cursor 中把该命令配置为 MCP server
 
+### 无凭据启动（agent 引导配置）
+
+服务**不需要预置凭据也能启动**（stdio 与 HTTP 模式均可）：
+
+```bash
+uv run email-mcp            # 未配置 .env 也能启动，会提示"未配置邮箱"
+```
+
+未配置时，连接到服务的 agent 调用邮箱工具会收到 `CONFIG_MISSING` 引导错误，agent 应：
+
+1. 调用 `get_account_status` 查看缺失配置项
+2. 向用户询问邮箱凭据（IMAP/SMTP 主机、用户名、授权码）
+3. 调用 `configure_account` 写入配置（凭据为敏感信息，写入前请先征得用户同意；写入后立即生效并持久化到 `.env`，重启自动加载）
+4. 调用 `test_email_connection` 验证 IMAP/SMTP 登录是否成功
+
+> 提示：`configure_account` 写入的 `.env` 已被 gitignore，不会进入版本库。
+
 ## Claude Desktop 配置
 
 在 `claude_desktop_config.json` 中添加：

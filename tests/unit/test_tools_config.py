@@ -54,6 +54,25 @@ async def test_configure_account_flow(provider, tmp_path):
         ctx.scheduler.stop()  # 停掉 configure_account 启动的后台线程
 
 
+def test_configure_account_strips_values(provider, tmp_path):
+    # 校验用 strip() 但存储用原始值会导致 " u@x.com " 通过校验却原样存储，
+    # 之后 test_email_connection 出现迷惑性认证失败——存储前必须 strip。
+    from email_mcp.service.config_service import ConfigService
+
+    ctx = AppContext(account=None, provider=provider)
+    service = ConfigService(ctx, env_path=str(tmp_path / ".env"))
+    result = service.configure_account(
+        imap_host="  imap.x.com  ", smtp_host=" smtp.x.com ",
+        username=" u@x.com ", auth_secret=" topsecret ",
+    )
+    assert result["success"] is True
+    assert ctx.account is not None
+    assert ctx.account.username == "u@x.com"
+    assert ctx.account.imap_host == "imap.x.com"
+    assert ctx.account.auth_secret == "topsecret"
+    ctx.scheduler.stop()  # 清理后台线程
+
+
 @pytest.mark.asyncio
 async def test_configure_account_empty_secret(provider):
     from email_mcp.service.config_service import ConfigService
