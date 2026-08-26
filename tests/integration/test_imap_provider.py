@@ -1,6 +1,7 @@
 """验证 ImapProvider 用 mock 的 IMAP 连接执行正确协议序列（全部基于 UID 操作）。"""
 from unittest.mock import MagicMock, patch
 
+from email_mcp.errors import EmailMCPError, ErrorCode
 from email_mcp.provider.imap_provider import ImapProvider
 
 RAW = (
@@ -151,13 +152,28 @@ def test_mark_read_uses_uid_store(account):
 def test_move_uses_uid_copy_then_expunge(account):
     conn = MagicMock()
     conn.select.return_value = ("OK", [b"1"])
+    conn.uid.return_value = ("OK", [b""])  # 所有 UID 命令成功
     with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
         provider = ImapProvider()
         provider.move(account, "INBOX", "1", "Archive")
     calls = [c.args for c in conn.uid.call_args_list]
     assert ("COPY", "1", "Archive") in calls
     assert ("STORE", "1", "+FLAGS", "(\\Deleted)") in calls
-    conn.expunge.assert_called_once()
+    assert ("EXPUNGE",) in calls
+    conn.expunge.assert_not_called()  # UID EXPUNGE 成功时不走 expunge 回退
+
+
+def test_move_copy_failure_raises_folder_not_found(account):
+    conn = MagicMock()
+    conn.select.return_value = ("OK", [b"1"])
+    conn.uid.return_value = ("BAD", [])
+    with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
+        provider = ImapProvider()
+        try:
+            provider.move(account, "INBOX", "1", "Missing")
+            raise AssertionError("should have raised")
+        except EmailMCPError as ei:
+            assert ei.code == ErrorCode.FOLDER_NOT_FOUND
 
 
 def test_search_uses_uid_with_criteria(account):
@@ -212,17 +228,30 @@ def test_list_folders_parses_list_response(account):
     assert folders == ["INBOX", "Sent", "[Gmail]/All Mail"]
 
 
-def test_save_draft_appends_and_returns_drafts_id(account):
+def test_save_draft_returns_real_appenduid(account):
     conn = MagicMock()
     conn.select.return_value = ("OK", [b"1"])
-    conn.append.return_value = ("OK", [b"123"])
+    conn.append.return_value = ("OK", [b"[APPENDUID 38505 3955] APPEND completed"])
     with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
         provider = ImapProvider()
-        result = provider.save_draft(
-            account, to=["a@b.com"], subject="Draft", body="hi"
+        draft_id = provider.save_draft(
+            account, to=["a@b.com"], cc=None, subject="D", body="WIP"
         )
-    assert result == "Drafts:123"
-    append_args = conn.append.call_args.args
-    assert append_args[0] == "Drafts"
-    assert isinstance(append_args[3], bytes)
-    assert b"Subject: Draft" in append_args[3]
+    assert draft_id == "Drafts:3955"
+    appended = conn.append.call_args.args[3]
+    assert b"Message-ID:" in appended
+    assert b"Subject: D" in appended
+
+
+def test_save_draft_falls_back_to_search_without_uidplus(account):
+    conn = MagicMock()
+    conn.select.return_value = ("OK", [b"1"])
+    conn.append.return_value = ("OK", [b"APPEND completed"])  # 无 UIDPLUS
+    conn.uid.return_value = ("OK", [b"42"])
+    with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
+        provider = ImapProvider()
+        draft_id = provider.save_draft(
+            account, to=["a@b.com"], cc=None, subject="D", body="WIP"
+        )
+    assert draft_id == "Drafts:42"
+    assert conn.uid.call_args_list[0].args[0] == "SEARCH"

@@ -1,4 +1,3 @@
-# src/email_mcp/service/scheduler.py
 """本地调度队列：定时发送与 snooze 的持久化与到期执行。
 
 SchedulerStore 负责 JSON 文件持久化（线程安全：锁 + 原子写）；

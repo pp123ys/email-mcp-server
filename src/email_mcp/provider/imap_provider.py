@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import email
+import email.utils
 import re
 from datetime import datetime
 from email import policy
@@ -10,6 +11,16 @@ from email_mcp.models import Account, AttachmentMeta, EmailMessage
 from email_mcp.provider.imap_client import IMAPClient
 from email_mcp.provider.parser import find_part_by_path, parse_email_message
 from email_mcp.provider.smtp_client import SMTPClient
+
+
+def _extract_appenduid(data: list[bytes]) -> str | None:
+    """从 APPEND 响应中提取 UIDPLUS 的 APPENDUID；无则返回 None。"""
+    for item in data:
+        if isinstance(item, bytes):
+            match = re.search(r"APPENDUID\s+\d+\s+(\d+)", item.decode(errors="replace"))
+            if match:
+                return match.group(1)
+    return None
 
 
 def _fetch_rfc822(
@@ -238,11 +249,28 @@ class ImapProvider:
             if cc:
                 draft["Cc"] = ", ".join(cc)
             draft["Subject"] = subject
+            draft["Message-ID"] = email.utils.make_msgid(domain=account.smtp_host)
             draft.set_content(body)
             status, data = conn.append("Drafts", None, None, draft.as_bytes())
             if status != "OK":
                 raise EmailMCPError(ErrorCode.INTERNAL, "保存草稿失败")
-            return f"Drafts:{data[0].decode()}"
+            uid = _extract_appenduid(data)
+            if uid is None:
+                # 无 UIDPLUS：按 Message-ID 回查最新一条草稿。
+                # None 是 imaplib 的 SEARCH charset 约定（跳过 CHARSET 参数），
+                # typeshed 的 *args: str 覆盖不到，故加 type: ignore。
+                search_status, search_data = conn.uid(
+                    "SEARCH",
+                    None,  # type: ignore[arg-type]
+                    "HEADER",
+                    "Message-ID",
+                    f'"{draft["Message-ID"]}"',
+                )
+                if search_status == "OK" and search_data and search_data[0]:
+                    uid = search_data[0].split()[-1].decode()
+                else:
+                    raise EmailMCPError(ErrorCode.INTERNAL, "保存草稿后无法确定草稿 UID")
+            return f"Drafts:{uid}"
 
     def list_drafts(self, account: Account) -> list[EmailMessage]:
         with self._imap(account).connect() as conn:
@@ -298,9 +326,15 @@ class ImapProvider:
     def move(self, account: Account, folder: str, uid: str, dest_folder: str) -> None:
         with self._imap(account).connect() as conn:
             conn.select(folder)
-            conn.uid("COPY", uid, dest_folder)
+            copy_status, _ = conn.uid("COPY", uid, dest_folder)
+            if copy_status != "OK":
+                raise EmailMCPError(
+                    ErrorCode.FOLDER_NOT_FOUND, f"复制到目标文件夹失败: {dest_folder}"
+                )
             conn.uid("STORE", uid, "+FLAGS", "(\\Deleted)")
-            conn.expunge()
+            status, _ = conn.uid("EXPUNGE")  # UID EXPUNGE：只删除目标消息
+            if status != "OK":
+                conn.expunge()  # 不支持 UID EXPUNGE 的服务端回退
 
     def trash(self, account: Account, folder: str, uid: str) -> None:
         self.move(account, folder, uid, "Trash")

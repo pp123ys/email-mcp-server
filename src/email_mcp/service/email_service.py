@@ -169,6 +169,21 @@ class EmailService:
 
     # ---- 发送与草稿 ----
 
+    def _send(
+        self,
+        *,
+        to: list[str],
+        cc: list[str] | None,
+        subject: str,
+        body: str,
+    ) -> str:
+        """统一发送入口：先过频率限制，再调 provider。"""
+        if self.rate_limiter is not None:
+            self.rate_limiter.check()
+        return self.provider.send(
+            self.account, to=to, cc=cc, subject=subject, body=body
+        )
+
     def send_email(
         self,
         to: list[str],
@@ -180,9 +195,7 @@ class EmailService:
             if not to:
                 raise EmailMCPError(ErrorCode.INVALID_RECIPIENT, "收件人列表不能为空")
             validate_recipients(to, cc)
-            message_id = self.provider.send(
-                self.account, to=to, cc=cc, subject=subject, body=body
-            )
+            message_id = self._send(to=to, cc=cc, subject=subject, body=body)
             return {"message_id": message_id}
         return self._wrap(run)
 
@@ -225,8 +238,8 @@ class EmailService:
             )
             full_body = f"{body}\n\n{quote}"
             validate_recipients([original.from_.email], cc)
-            message_id = self.provider.send(
-                self.account, to=[original.from_.email], cc=cc,
+            message_id = self._send(
+                to=[original.from_.email], cc=cc,
                 subject=f"Re: {original.subject}", body=full_body,
             )
             return {"message_id": message_id, "original_email_id": original.id}
@@ -246,8 +259,8 @@ class EmailService:
             )
             full_body = f"{body}\n\n---------- 转发 ----------\n{quote}"
             validate_recipients(to)
-            message_id = self.provider.send(
-                self.account, to=to, cc=None,
+            message_id = self._send(
+                to=to, cc=None,
                 subject=f"Fwd: {original.subject}", body=full_body,
             )
             return {"message_id": message_id}

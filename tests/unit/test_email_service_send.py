@@ -69,3 +69,17 @@ def test_save_draft_allows_empty_to(account, provider):
     svc = make_service(account, provider)
     result = svc.save_draft(to=[], subject="Untitled", body="WIP")
     assert result["success"] is True
+
+
+def test_send_email_rate_limited(account, provider):
+    from email_mcp.service.guardrails import RateLimiter
+
+    svc = EmailService(
+        provider=provider,
+        account=account,
+        rate_limiter=RateLimiter(max_per_minute=1),
+    )
+    assert svc.send_email(to=["a@b.com"], subject="Hi", body="1")["success"] is True
+    result = svc.send_email(to=["a@b.com"], subject="Hi", body="2")
+    assert result["success"] is False
+    assert result["error"]["code"] == "RATE_LIMITED"
