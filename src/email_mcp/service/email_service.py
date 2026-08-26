@@ -12,6 +12,15 @@ from email_mcp.service.scheduler import SchedulerStore
 from email_mcp.service.validators import validate_recipients
 
 
+def build_quote_block(sender: str, date_str: str, original_body: str) -> str:
+    """生成 'On ... wrote:' 风格引用块。"""
+    lines = []
+    for line in (original_body or "").splitlines():
+        lines.append(f"> {line}")
+    header = f"On {date_str} {sender} wrote:"
+    return header + "\n" + "\n".join(lines)
+
+
 class EmailService:
     """工具层与 Provider 之间的业务门面。所有方法返回 MCP 工具可直接序列化的 dict。"""
 
@@ -184,4 +193,105 @@ class EmailService:
         def run() -> list[dict[str, Any]]:
             drafts = self.provider.list_drafts(self.account)
             return [m.model_dump(mode="json") for m in drafts]
+        return self._wrap(run)
+
+    # ---- 操作组 ----
+
+    def reply_email(
+        self, email_id: str, body: str, cc: list[str] | None = None
+    ) -> dict[str, Any]:
+        def run() -> dict[str, Any]:
+            folder, uid = self._parse_email_id(email_id)
+            try:
+                original = self.provider.get_message(self.account, folder, uid)
+            except KeyError:
+                raise EmailMCPError(ErrorCode.EMAIL_NOT_FOUND, f"未找到邮件 {email_id}") from None
+            quote = build_quote_block(
+                original.from_.name or original.from_.email,
+                original.date.strftime("%Y-%m-%d %H:%M"),
+                original.body,
+            )
+            full_body = f"{body}\n\n{quote}"
+            validate_recipients([original.from_.email], cc)
+            message_id = self.provider.send(
+                self.account, to=[original.from_.email], cc=cc,
+                subject=f"Re: {original.subject}", body=full_body,
+            )
+            return {"message_id": message_id, "in_reply_to": original.id}
+        return self._wrap(run)
+
+    def forward_email(self, email_id: str, to: list[str], body: str) -> dict[str, Any]:
+        def run() -> dict[str, Any]:
+            folder, uid = self._parse_email_id(email_id)
+            try:
+                original = self.provider.get_message(self.account, folder, uid)
+            except KeyError:
+                raise EmailMCPError(ErrorCode.EMAIL_NOT_FOUND, f"未找到邮件 {email_id}") from None
+            quote = build_quote_block(
+                original.from_.name or original.from_.email,
+                original.date.strftime("%Y-%m-%d %H:%M"),
+                original.body,
+            )
+            full_body = f"{body}\n\n---------- 转发 ----------\n{quote}"
+            validate_recipients(to)
+            message_id = self.provider.send(
+                self.account, to=to, cc=None,
+                subject=f"Fwd: {original.subject}", body=full_body,
+            )
+            return {"message_id": message_id}
+        return self._wrap(run)
+
+    def mark_read(self, email_id: str) -> dict[str, Any]:
+        def run() -> dict[str, Any]:
+            folder, uid = self._parse_email_id(email_id)
+            self.provider.mark_read(self.account, folder, uid)
+            return {"email_id": email_id}
+        return self._wrap(run)
+
+    def mark_unread(self, email_id: str) -> dict[str, Any]:
+        def run() -> dict[str, Any]:
+            folder, uid = self._parse_email_id(email_id)
+            self.provider.mark_unread(self.account, folder, uid)
+            return {"email_id": email_id}
+        return self._wrap(run)
+
+    def archive(self, email_id: str) -> dict[str, Any]:
+        def run() -> dict[str, Any]:
+            folder, uid = self._parse_email_id(email_id)
+            self.provider.archive(self.account, folder, uid)
+            return {"email_id": email_id}
+        return self._wrap(run)
+
+    def move_email(self, email_id: str, dest_folder: str) -> dict[str, Any]:
+        def run() -> dict[str, Any]:
+            folder, uid = self._parse_email_id(email_id)
+            self.provider.move(self.account, folder, uid, dest_folder)
+            return {"email_id": email_id, "dest_folder": dest_folder}
+        return self._wrap(run)
+
+    def trash_email(self, email_id: str) -> dict[str, Any]:
+        def run() -> dict[str, Any]:
+            folder, uid = self._parse_email_id(email_id)
+            self.provider.trash(self.account, folder, uid)
+            return {"email_id": email_id}
+        return self._wrap(run)
+
+    def set_flag(self, email_id: str, flag: str = "\\Flagged") -> dict[str, Any]:
+        def run() -> dict[str, Any]:
+            folder, uid = self._parse_email_id(email_id)
+            self.provider.set_flag(self.account, folder, uid, flag)
+            return {"email_id": email_id, "flag": flag}
+        return self._wrap(run)
+
+    def pin_email(self, email_id: str) -> dict[str, Any]:
+        return self.set_flag(email_id, "\\Flagged")
+
+    def snooze_email(self, email_id: str, until: str) -> dict[str, Any]:
+        def run() -> dict[str, Any]:
+            if self.scheduler_store is None:
+                raise EmailMCPError(ErrorCode.CONFIG_MISSING, "调度器未初始化")
+            self.scheduler_store.add_snooze(
+                {"id": email_id, "until": until, "email_id": email_id}
+            )
+            return {"email_id": email_id, "snoozed_until": until}
         return self._wrap(run)

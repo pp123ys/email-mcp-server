@@ -43,8 +43,8 @@ class AppContext:
                 raise RuntimeError(result["error"]["message"])
 
         def snooze(item: dict[str, Any]) -> None:
-            # EmailService.mark_unread 由 Task 20 补充，此处为预期的临时忽略
-            result = email_service.mark_unread(item["email_id"])  # type: ignore[attr-defined]
+            # snooze 到期时把邮件重新标记为未读，提醒用户处理
+            result = email_service.mark_unread(item["email_id"])
             if not result["success"]:
                 raise RuntimeError(result["error"]["message"])
 
