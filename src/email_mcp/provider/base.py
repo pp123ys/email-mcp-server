@@ -11,6 +11,14 @@ class EmailProvider(Protocol):
     第一版实现：ImapProvider（imaplib + smtplib）。
     未来实现：GmailProvider（Gmail API）、OutlookProvider（Graph API）。
     新增提供者 = 新增一个实现文件 + 注册，不改动上三层。
+
+    分页约定：provider 负责按 page/page_size 切片（page 从 1 开始），
+    返回 (本页消息列表, 总数)；服务层根据 total 计算 total_pages，不得对
+    已切片的列表再次分页。
+
+    异常约定：get_message/get_attachments/get_headers/download_attachment
+    在消息不存在时抛 KeyError（服务层转换为 EMAIL_NOT_FOUND）；其余错误抛
+    EmailMCPError。
     """
 
     def list_messages(
