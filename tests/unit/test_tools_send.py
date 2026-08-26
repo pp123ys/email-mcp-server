@@ -21,6 +21,16 @@ async def test_send_email_invalid_recipient(account, provider):
 
 
 @pytest.mark.asyncio
+async def test_send_email_cc_tool(account, provider):
+    mcp = build_server(AppContext(account=account, provider=provider))
+    await mcp.call_tool(
+        "send_email",
+        {"to": ["a@b.com"], "cc": ["c@d.com"], "subject": "Hi", "body": "Hello"},
+    )
+    assert provider.sent[0]["cc"] == ["c@d.com"]
+
+
+@pytest.mark.asyncio
 async def test_save_draft_tool(account, provider):
     mcp = build_server(AppContext(account=account, provider=provider))
     result = await mcp.call_tool("save_draft", {"to": ["a@b.com"], "subject": "D", "body": "WIP"})
@@ -32,4 +42,5 @@ async def test_list_drafts_tool(account, provider):
     mcp = build_server(AppContext(account=account, provider=provider))
     await mcp.call_tool("save_draft", {"to": ["a@b.com"], "subject": "D", "body": "WIP"})
     result = await mcp.call_tool("list_drafts", {})
-    assert "D" in str(result)
+    assert "Drafts" in str(result)
+    assert "WIP" in str(result)

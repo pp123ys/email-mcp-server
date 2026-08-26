@@ -13,13 +13,23 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
     assert ctx.email_service is not None
     svc = ctx.email_service
 
-    @mcp.tool(description="直接发送邮件（立即投递）；to 为收件人地址列表")
+    @mcp.tool(
+        description=(
+            "直接发送邮件（立即投递）；to 不能为空，cc 可选；"
+            "如需人工确认请改用 save_draft 存草稿后手动发送"
+        )
+    )
     def send_email(
         to: list[str], subject: str, body: str, cc: list[str] | None = None
     ) -> dict[str, Any]:
         return svc.send_email(to=to, cc=cc, subject=subject, body=body)
 
-    @mcp.tool(description="存草稿到 Drafts 文件夹（人工确认后手动发送）；to 可为空")
+    @mcp.tool(
+        description=(
+            "存草稿到 Drafts 文件夹（人工确认后手动发送）；"
+            "to 可为空（先起草后补收件人），cc 可选"
+        )
+    )
     def save_draft(
         to: list[str], subject: str, body: str, cc: list[str] | None = None
     ) -> dict[str, Any]:
