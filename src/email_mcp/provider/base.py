@@ -60,6 +60,14 @@ class EmailProvider(Protocol):
         """列出所有文件夹（标签映射为文件夹）。"""
         ...
 
+    def create_folder(self, account: Account, name: str) -> None:
+        """创建文件夹（创建标签）。"""
+        ...
+
+    def delete_folder(self, account: Account, name: str) -> None:
+        """删除文件夹（删除标签）。"""
+        ...
+
     def get_attachments(
         self, account: Account, folder: str, uid: str
     ) -> list[AttachmentMeta]:

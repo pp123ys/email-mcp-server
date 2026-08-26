@@ -178,6 +178,18 @@ class ImapProvider:
                         folders.append(parts[-2].strip())
             return folders
 
+    def create_folder(self, account: Account, name: str) -> None:
+        with self._imap(account).connect() as conn:
+            status, _ = conn.create(name)
+            if status != "OK":
+                raise EmailMCPError(ErrorCode.INTERNAL, f"创建文件夹失败: {name}")
+
+    def delete_folder(self, account: Account, name: str) -> None:
+        with self._imap(account).connect() as conn:
+            status, _ = conn.delete(name)
+            if status != "OK":
+                raise EmailMCPError(ErrorCode.INTERNAL, f"删除文件夹失败: {name}")
+
     def get_attachments(
         self, account: Account, folder: str, uid: str
     ) -> list[AttachmentMeta]:

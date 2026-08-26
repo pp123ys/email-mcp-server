@@ -40,6 +40,7 @@ class FakeProvider:
         self.messages: list[EmailMessage] = messages or []
         self.sent: list[dict] = []
         self.drafts: list[EmailMessage] = []
+        self._folders: list[str] = ["INBOX", "Sent"]
 
     def list_messages(
         self, account, folder, *, page, page_size, unread_only=False, from_email=None
@@ -89,7 +90,14 @@ class FakeProvider:
         return items
 
     def list_folders(self, account):
-        return sorted({m.folder for m in self.messages} | {"INBOX", "Sent"})
+        return sorted(self._folders)
+
+    def create_folder(self, account, name):
+        if name not in self._folders:
+            self._folders.append(name)
+
+    def delete_folder(self, account, name):
+        self._folders = [f for f in self._folders if f != name]
 
     def get_attachments(self, account, folder, uid):
         return self.get_message(account, folder, uid).attachments

@@ -6,6 +6,7 @@ from typing import Any
 from email_mcp.errors import EmailMCPError, ErrorCode, error_result
 from email_mcp.models import Account
 from email_mcp.provider.base import EmailProvider
+from email_mcp.service.guardrails import RateLimiter
 from email_mcp.service.ids import parse_email_id
 from email_mcp.service.pagination import page_meta
 from email_mcp.service.quoting import build_quote_block
@@ -25,6 +26,8 @@ def _validate_flag(flag: str) -> None:
                 "（允许 \\Flagged/\\Seen/\\Answered/\\Draft/\\Deleted 或 $ 开头关键字）"
             ),
         )
+    if any(c in flag for c in ")\r\n"):
+        raise EmailMCPError(ErrorCode.CONFIG_INVALID, f"邮件标记包含非法字符: {flag!r}")
 
 
 class EmailService:
@@ -35,11 +38,13 @@ class EmailService:
         provider: EmailProvider,
         account: Account,
         scheduler_store: SchedulerStore | None = None,
+        rate_limiter: RateLimiter | None = None,
     ):
         self.provider = provider
         self.account = account
         # Task 20/21 的 snooze/定时发送工具将使用 scheduler_store
         self.scheduler_store = scheduler_store
+        self.rate_limiter = rate_limiter
 
     # ---- 工具方法 ----
 
@@ -297,10 +302,85 @@ class EmailService:
         def run() -> dict[str, Any]:
             if self.scheduler_store is None:
                 raise EmailMCPError(ErrorCode.CONFIG_MISSING, "调度器未初始化")
+            from datetime import datetime
+
+            try:
+                datetime.fromisoformat(until)
+            except ValueError:
+                raise EmailMCPError(
+                    ErrorCode.CONFIG_INVALID, f"until 必须是 ISO 时间格式，收到 {until!r}"
+                ) from None
             from uuid import uuid4
 
             self.scheduler_store.add_snooze(
                 {"id": str(uuid4()), "until": until, "email_id": email_id}
             )
             return {"email_id": email_id, "snoozed_until": until}
+        return self._wrap(run)
+
+    # ---- 高级组 ----
+
+    def batch_send(self, to: list[str], subject: str, body: str) -> dict[str, Any]:
+        def run() -> dict[str, Any]:
+            from email_mcp.service.guardrails import check_batch_size
+
+            check_batch_size(to)
+            validate_recipients(to)
+            message_ids = []
+            for addr in to:
+                if self.rate_limiter is not None:
+                    self.rate_limiter.check()
+                mid = self.provider.send(
+                    self.account, to=[addr], cc=None, subject=subject, body=body
+                )
+                message_ids.append(mid)
+            return {"sent": len(message_ids), "message_ids": message_ids}
+        return self._wrap(run)
+
+    def schedule_send(
+        self, to: list[str], subject: str, body: str, send_at: str
+    ) -> dict[str, Any]:
+        def run() -> dict[str, Any]:
+            if self.scheduler_store is None:
+                raise EmailMCPError(ErrorCode.CONFIG_MISSING, "调度器未初始化")
+            validate_recipients(to)
+            from datetime import datetime
+            from uuid import uuid4
+
+            try:
+                datetime.fromisoformat(send_at)
+            except ValueError:
+                raise EmailMCPError(
+                    ErrorCode.CONFIG_INVALID, f"send_at 必须是 ISO 时间格式，收到 {send_at!r}"
+                ) from None
+            item = {
+                "id": str(uuid4()),
+                "to": to,
+                "subject": subject,
+                "body": body,
+                "send_at": send_at,
+            }
+            self.scheduler_store.add_scheduled_send(item)
+            return {"schedule_id": item["id"], "send_at": send_at}
+        return self._wrap(run)
+
+    def create_label(self, name: str) -> dict[str, Any]:
+        def run() -> dict[str, Any]:
+            if not name or any(c in name for c in "/\\"):
+                raise EmailMCPError(ErrorCode.CONFIG_INVALID, f"标签名不合法: {name!r}")
+            self.provider.create_folder(self.account, name)
+            return {"label": name}
+        return self._wrap(run)
+
+    def manage_labels(self, action: str, name: str | None = None) -> dict[str, Any]:
+        def run() -> dict[str, Any]:
+            if action == "list":
+                return {"labels": self.provider.list_folders(self.account)}
+            if action == "delete" and name:
+                self.provider.delete_folder(self.account, name)
+                return {"deleted": name}
+            raise EmailMCPError(
+                ErrorCode.CONFIG_INVALID,
+                "action 只能是 list 或 delete（delete 需提供 name）",
+            )
         return self._wrap(run)

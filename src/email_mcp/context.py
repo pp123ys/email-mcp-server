@@ -4,9 +4,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from email_mcp.config import send_rate_limit
 from email_mcp.models import Account
 from email_mcp.provider.base import EmailProvider
 from email_mcp.service.email_service import EmailService
+from email_mcp.service.guardrails import RateLimiter
 from email_mcp.service.scheduler import Scheduler, SchedulerStore
 from email_mcp.service.thread_service import ThreadService
 from email_mcp.service.unsubscribe_service import UnsubscribeService
@@ -28,7 +30,9 @@ class AppContext:
         # 用局部非 None 引用：字段是 Optional，mypy strict 下无法在回调中收窄
         scheduler_store = SchedulerStore(Path("data/scheduler.json"))
         self.scheduler_store = scheduler_store
-        email_service = EmailService(self.provider, self.account, scheduler_store)
+        email_service = EmailService(
+            self.provider, self.account, scheduler_store, RateLimiter(send_rate_limit())
+        )
         self.email_service = email_service
         self.thread_service = ThreadService(self.provider, self.account)
         self.unsubscribe_service = UnsubscribeService(self.provider, self.account)
