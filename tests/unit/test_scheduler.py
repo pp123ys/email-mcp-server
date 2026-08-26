@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from email_mcp.service.scheduler import SchedulerStore
+from email_mcp.service.scheduler import Scheduler, SchedulerStore
 
 
 def make_store(tmp_path):
@@ -40,3 +40,66 @@ def test_remove(tmp_path):
     store.add_scheduled_send({"id": "a", "to": [], "subject": "", "body": "", "send_at": "x"})
     store.remove("scheduled_sends", "a")
     assert store.load()["scheduled_sends"] == []
+
+
+def test_process_due_executes_and_removes(tmp_path):
+    store = make_store(tmp_path)
+    store.add_scheduled_send(
+        {
+            "id": "a",
+            "to": [],
+            "subject": "",
+            "body": "",
+            "send_at": (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat(),
+        }
+    )
+    store.add_snooze(
+        {
+            "id": "z",
+            "email_id": "INBOX:1",
+            "until": (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat(),
+        }
+    )
+    sent, snoozed = [], []
+    scheduler = Scheduler(store, lambda item: sent.append(item), lambda item: snoozed.append(item))
+    scheduler.process_due()
+    assert [i["id"] for i in sent] == ["a"]
+    assert [i["id"] for i in snoozed] == ["z"]
+    assert store.load()["scheduled_sends"] == []
+    assert store.load()["snoozes"] == []
+
+
+def test_process_due_uses_aware_now(tmp_path):
+    store = make_store(tmp_path)
+    store.add_scheduled_send(
+        {
+            "id": "future",
+            "to": [],
+            "subject": "",
+            "body": "",
+            "send_at": "2099-09-01T09:00:00+00:00",
+        }
+    )
+    sent = []
+    Scheduler(store, lambda item: sent.append(item), lambda item: None).process_due()  # 默认 now
+    assert sent == []
+
+
+def test_process_due_failure_keeps_item_and_continues(tmp_path):
+    store = make_store(tmp_path)
+    store.add_scheduled_send(
+        {"id": "bad", "to": [], "subject": "", "body": "", "send_at": "2000-01-01T00:00:00+00:00"}
+    )
+    store.add_scheduled_send(
+        {"id": "good", "to": [], "subject": "", "body": "", "send_at": "2000-01-01T00:00:00+00:00"}
+    )
+    sent: list[str] = []
+
+    def flaky(item):
+        if item["id"] == "bad":
+            raise RuntimeError("smtp boom")
+        sent.append(item["id"])
+
+    Scheduler(store, flaky, lambda item: None).process_due()
+    assert sent == ["good"]
+    assert [i["id"] for i in store.load()["scheduled_sends"]] == ["bad"]
