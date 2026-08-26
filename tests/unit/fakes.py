@@ -79,6 +79,7 @@ class FakeProvider:
         return self.get_message(account, folder, uid).attachments
 
     def download_attachment(self, account, folder, uid, part_id):
+        self.get_message(account, folder, uid)  # 消息不存在时抛 KeyError
         return b"fake-content"
 
     def get_headers(self, account, folder, uid):
