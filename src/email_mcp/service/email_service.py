@@ -7,6 +7,7 @@ from email_mcp.errors import EmailMCPError, ErrorCode, error_result
 from email_mcp.models import Account
 from email_mcp.provider.base import EmailProvider
 from email_mcp.service.pagination import page_meta
+from email_mcp.service.validators import validate_recipients
 
 
 class EmailService:
@@ -145,18 +146,6 @@ class EmailService:
 
     # ---- 发送与草稿 ----
 
-    def _validate_recipients(self, to: list[str], cc: list[str] | None = None) -> None:
-        from email_validator import EmailNotValidError, validate_email
-
-        bad: list[str] = []
-        for addr in list(to) + list(cc or []):
-            try:
-                validate_email(addr, check_deliverability=False)
-            except EmailNotValidError:
-                bad.append(addr)
-        if bad:
-            raise EmailMCPError(ErrorCode.INVALID_RECIPIENT, f"非法收件人: {bad}")
-
     def send_email(
         self,
         to: list[str],
@@ -165,7 +154,9 @@ class EmailService:
         cc: list[str] | None = None,
     ) -> dict[str, Any]:
         def run() -> dict[str, Any]:
-            self._validate_recipients(to, cc)
+            if not to:
+                raise EmailMCPError(ErrorCode.INVALID_RECIPIENT, "收件人列表不能为空")
+            validate_recipients(to, cc)
             message_id = self.provider.send(
                 self.account, to=to, cc=cc, subject=subject, body=body
             )
@@ -180,7 +171,7 @@ class EmailService:
         cc: list[str] | None = None,
     ) -> dict[str, Any]:
         def run() -> dict[str, Any]:
-            self._validate_recipients(to, cc)
+            validate_recipients(to, cc)
             draft_id = self.provider.save_draft(
                 self.account, to=to, cc=cc, subject=subject, body=body
             )
