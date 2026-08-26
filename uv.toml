@@ -1,0 +1,2 @@
+# uv 全局配置（本目录生效）：使用国内镜像加速依赖下载
+index-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
