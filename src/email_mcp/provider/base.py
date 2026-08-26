@@ -72,7 +72,7 @@ class EmailProvider(Protocol):
         account: Account,
         *,
         to: list[str],
-        cc: list[str] | None,
+        cc: list[str] | None = None,
         subject: str,
         body: str,
     ) -> str:
@@ -88,7 +88,7 @@ class EmailProvider(Protocol):
         account: Account,
         *,
         to: list[str],
-        cc: list[str] | None,
+        cc: list[str] | None = None,
         subject: str,
         body: str,
     ) -> str:
