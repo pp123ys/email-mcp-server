@@ -176,6 +176,26 @@ def test_move_copy_failure_raises_folder_not_found(account):
             assert ei.code == ErrorCode.FOLDER_NOT_FOUND
 
 
+def test_move_falls_back_to_expunge_when_uid_expunge_unsupported(account):
+    conn = MagicMock()
+    conn.select.return_value = ("OK", [b"1"])
+
+    def fake_uid(command, *args):
+        if command == "COPY":
+            return ("OK", [b""])
+        if command == "STORE":
+            return ("OK", [b""])
+        if command == "EXPUNGE":
+            return ("BAD", [])  # 服务端不支持 UID EXPUNGE
+        return ("OK", [b""])
+
+    conn.uid.side_effect = fake_uid
+    with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
+        provider = ImapProvider()
+        provider.move(account, "INBOX", "1", "Archive")
+    conn.expunge.assert_called_once()
+
+
 def test_search_uses_uid_with_criteria(account):
     conn = MagicMock()
     conn.select.return_value = ("OK", [b"1"])
