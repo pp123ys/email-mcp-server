@@ -133,6 +133,7 @@ class Scheduler:
     def start(self) -> None:
         if self._thread is not None:
             return
+        self._stop.clear()  # 允许 stop() 后再次 start()
         logger.info("调度器后台循环启动（间隔 %ss）", self.interval)
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()

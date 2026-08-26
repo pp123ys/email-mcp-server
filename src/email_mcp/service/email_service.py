@@ -8,15 +8,23 @@ from email_mcp.models import Account
 from email_mcp.provider.base import EmailProvider
 from email_mcp.service.ids import parse_email_id
 from email_mcp.service.pagination import page_meta
+from email_mcp.service.scheduler import SchedulerStore
 from email_mcp.service.validators import validate_recipients
 
 
 class EmailService:
     """工具层与 Provider 之间的业务门面。所有方法返回 MCP 工具可直接序列化的 dict。"""
 
-    def __init__(self, provider: EmailProvider, account: Account):
+    def __init__(
+        self,
+        provider: EmailProvider,
+        account: Account,
+        scheduler_store: SchedulerStore | None = None,
+    ):
         self.provider = provider
         self.account = account
+        # Task 20/21 的 snooze/定时发送工具将使用 scheduler_store
+        self.scheduler_store = scheduler_store
 
     # ---- 工具方法 ----
 
