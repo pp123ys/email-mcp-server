@@ -37,6 +37,13 @@ def build_server(ctx: AppContext, *, host: str = "127.0.0.1", port: int = 8080) 
 def main() -> None:
     parser = argparse.ArgumentParser(description="email-mcp server")
     parser.add_argument("--http", action="store_true", help="以 Streamable HTTP 模式运行")
+    parser.add_argument(
+        "--host", default="127.0.0.1",
+        help="HTTP 监听地址（默认 127.0.0.1；公网部署用 0.0.0.0）",
+    )
+    parser.add_argument(
+        "--port", type=int, default=8080, help="HTTP 监听端口（默认 8080）"
+    )
     args = parser.parse_args()
 
     account = load_account(strict=False)
@@ -46,7 +53,7 @@ def main() -> None:
             "agent 可通过 get_account_status 查看状态、configure_account 完成配置"
         )
     ctx = AppContext(account=account, provider=ImapProvider())
-    mcp = build_server(ctx)
+    mcp = build_server(ctx, host=args.host, port=args.port)
 
     ctx.start_scheduler()
     try:

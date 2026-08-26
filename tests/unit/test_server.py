@@ -20,6 +20,13 @@ async def test_build_server_registers_tools(account, provider):
     assert len(names) == 30
 
 
+def test_build_server_host_port(account, provider):
+    ctx = AppContext(account=account, provider=provider)
+    mcp = build_server(ctx, host="0.0.0.0", port=9090)
+    assert mcp.settings.host == "0.0.0.0"
+    assert mcp.settings.port == 9090
+
+
 def test_appcontext_scheduler_retains_failed_scheduled_send(
     account, provider, tmp_path, monkeypatch
 ):
