@@ -175,7 +175,8 @@ class ImapProvider:
                 message_set = ",".join(u.decode() for u in batch)
                 status, fetch = conn.uid(
                     "FETCH", message_set,
-                    "(UID RFC822.SIZE BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE MESSAGE-ID)])",
+                    "(UID RFC822.SIZE BODY.PEEK[HEADER.FIELDS "
+                    "(SUBJECT FROM TO CC DATE MESSAGE-ID)])",
                 )
                 if status != "OK":
                     continue

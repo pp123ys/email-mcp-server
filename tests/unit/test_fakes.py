@@ -52,6 +52,8 @@ def test_fake_search_returns_lightweight_text(account: Account, provider: FakePr
     assert msgs[0].subject == "s2"
     assert msgs[0].body == ""
     assert msgs[0].attachments == []
+    # 收件人以元数据形式透传（不随轻量化清空）
+    assert msgs[0].to[0].email == "me@x.com"
 
 
 def test_fake_search_filters_by_query_subject(account: Account, provider: FakeProvider):

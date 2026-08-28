@@ -55,8 +55,8 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
 
     @mcp.tool(
         description=(
-            "关键词/发件人/日期范围搜索；结果仅含元数据（主题/发件人/日期/ID），"
-            "正文为空，需要读取正文请用 read_email"
+            "关键词/发件人/日期范围搜索；结果仅含元数据（主题/发件人/收件人/日期/ID），"
+            "正文为空，按服务器顺序返回未排序；需要读取正文请用 read_email"
         )
     )
     @async_run
