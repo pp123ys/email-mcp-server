@@ -87,7 +87,10 @@ class FakeProvider:
             ]
         if from_email:
             items = [m for m in items if m.from_.email == from_email]
-        return items
+        return [
+            m.model_copy(update={"body": "", "body_html": None, "attachments": []})
+            for m in items
+        ]
 
     def list_folders(self, account):
         return sorted(self._folders)

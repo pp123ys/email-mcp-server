@@ -68,6 +68,13 @@ def test_search_emails(account, provider):
     assert [m["subject"] for m in data] == ["s2"]
 
 
+def test_search_emails_lightweight(account, provider):
+    svc = make_service(account, provider)
+    data = svc.search_emails(query="s2")["data"]
+    assert data[0]["subject"] == "s2"
+    assert data[0]["body"] == ""
+
+
 def test_unexpected_exception_sealed_as_internal(account, provider, monkeypatch):
     def boom(self, account, folder, *, page, page_size, unread_only=False, from_email=None):
         raise RuntimeError("boom")

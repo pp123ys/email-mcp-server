@@ -166,15 +166,30 @@ class ImapProvider:
             status, data = conn.uid("SEARCH", *criteria)
             if status != "OK" or not data or not data[0]:
                 return []
+            # 轻量搜索：只取头部元数据（不拉正文/附件），分批批量 FETCH
+            uid_list = data[0].split() if data and data[0] else []
             messages: list[EmailMessage] = []
-            for uid in data[0].split():
-                status, fetch = conn.uid("FETCH", uid, "(RFC822)")
-                if status == "OK":
-                    raw = _fetch_rfc822(fetch)
-                    if raw is not None:
-                        messages.append(
-                            parse_email_message(raw, folder=folder, uid=uid.decode())
-                        )
+            batch_size = 100
+            for i in range(0, len(uid_list), batch_size):
+                batch = uid_list[i : i + batch_size]
+                message_set = ",".join(u.decode() for u in batch)
+                status, fetch = conn.uid(
+                    "FETCH", message_set,
+                    "(UID RFC822.SIZE BODY.PEEK[HEADER.FIELDS (SUBJECT FROM DATE MESSAGE-ID)])",
+                )
+                if status != "OK":
+                    continue
+                for entry in fetch:
+                    if not isinstance(entry, tuple) or len(entry) < 2:
+                        continue
+                    meta, header_bytes = entry[0], entry[1]
+                    uid_match = re.search(rb"UID (\d+)", meta)
+                    if not uid_match:
+                        continue
+                    uid = uid_match.group(1).decode()
+                    messages.append(
+                        parse_email_message(header_bytes, folder=folder, uid=uid)
+                    )
             return messages
 
     def list_folders(self, account: Account) -> list[str]:

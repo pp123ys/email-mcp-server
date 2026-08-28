@@ -197,9 +197,31 @@ def test_move_falls_back_to_expunge_when_uid_expunge_unsupported(account):
 
 
 def test_search_uses_uid_with_criteria(account):
+    header = (
+        b"From: Sender <sender@x.com>\r\nTo: me@x.com\r\nSubject: invoice\r\n"
+        b"Message-ID: <mi@x.com>\r\nDate: Thu, 01 Jan 2026 10:00:00 +0000\r\n\r\n"
+    )
     conn = MagicMock()
     conn.select.return_value = ("OK", [b"1"])
-    conn.uid.return_value = ("OK", [b"1"])
+
+    def fake_uid(command, *args):
+        if command == "SEARCH":
+            return ("OK", [b"7"])
+        if command == "FETCH":
+            return (
+                "OK",
+                [
+                    (
+                        b"7 (UID 7 RFC822.SIZE 999 "
+                        b"BODY[HEADER.FIELDS (SUBJECT FROM DATE MESSAGE-ID)] {125}",
+                        header,
+                        b")",
+                    )
+                ],
+            )
+        return ("OK", [b""])
+
+    conn.uid.side_effect = fake_uid
     with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
         provider = ImapProvider()
         provider.search(account, query="invoice", folder="INBOX")
@@ -230,6 +252,46 @@ def test_search_passes_since_until_criteria(account):
     assert "01-Jan-2026" in search_call
     assert "BEFORE" in search_call
     assert "31-Jan-2026" in search_call
+
+
+def test_search_returns_lightweight_metadata(account):
+    header = (
+        b"From: Sender <sender@x.com>\r\nTo: me@x.com\r\nSubject: Found\r\n"
+        b"Message-ID: <m1@x.com>\r\nDate: Thu, 01 Jan 2026 10:00:00 +0000\r\n"
+        b"\r\n"
+    )
+    conn = MagicMock()
+    conn.select.return_value = ("OK", [b"1"])
+
+    def fake_uid(command, *args):
+        if command == "SEARCH":
+            return ("OK", [b"2"])
+        if command == "FETCH":
+            return (
+                "OK",
+                [
+                    (
+                        b"1 (UID 2 RFC822.SIZE 999 "
+                        b"BODY[HEADER.FIELDS (SUBJECT FROM DATE MESSAGE-ID)] {168}",
+                        header,
+                        b")",
+                    )
+                ],
+            )
+        return ("OK", [b""])
+
+    conn.uid.side_effect = fake_uid
+    with patch("email_mcp.provider.imap_client.imaplib.IMAP4_SSL", return_value=conn):
+        provider = ImapProvider()
+        msgs = provider.search(account, query="found", folder="INBOX")
+    assert len(msgs) == 1
+    assert msgs[0].subject == "Found"
+    assert msgs[0].id == "INBOX:2"
+    assert msgs[0].body == ""
+    assert msgs[0].attachments == []
+    # 关键：断言用 BODY.PEEK[HEADER.FIELDS 而非完整 RFC822
+    fetch_args = conn.uid.call_args_list[1].args
+    assert "BODY.PEEK[HEADER.FIELDS" in fetch_args[2]
 
 
 def test_list_folders_parses_list_response(account):

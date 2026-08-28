@@ -46,6 +46,19 @@ def test_fake_list_messages_page2_continuation(account: Account, provider: FakeP
     assert [m.subject for m in msgs] == ["s3"]
 
 
+def test_fake_search_returns_lightweight_text(account: Account, provider: FakeProvider):
+    msgs = provider.search(account, query="s2")
+    assert len(msgs) == 1
+    assert msgs[0].subject == "s2"
+    assert msgs[0].body == ""
+    assert msgs[0].attachments == []
+
+
+def test_fake_search_filters_by_query_subject(account: Account, provider: FakeProvider):
+    msgs = provider.search(account, query="s2")
+    assert [m.subject for m in msgs] == ["s2"]
+
+
 def test_fake_provider_covers_all_protocol_methods():
     from email_mcp.provider.base import EmailProvider
 

@@ -53,7 +53,12 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
     def get_thread(email_id: str) -> dict[str, Any]:
         return thread().get_thread(email_id)
 
-    @mcp.tool(description="关键词/发件人/日期范围搜索")
+    @mcp.tool(
+        description=(
+            "关键词/发件人/日期范围搜索；结果仅含元数据（主题/发件人/日期/ID），"
+            "正文为空，需要读取正文请用 read_email"
+        )
+    )
     @async_run
     @guard(ctx)
     def search_emails(
