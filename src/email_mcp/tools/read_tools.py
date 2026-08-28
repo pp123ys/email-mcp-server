@@ -7,7 +7,7 @@ from mcp.server.fastmcp import FastMCP
 from email_mcp.context import AppContext
 from email_mcp.service.email_service import EmailService
 from email_mcp.service.thread_service import ThreadService
-from email_mcp.tools._guard import guard
+from email_mcp.tools._guard import async_run, guard
 
 
 def register(mcp: FastMCP, ctx: AppContext) -> None:
@@ -22,6 +22,7 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
         return ctx.thread_service
 
     @mcp.tool(description="分页列出邮件，支持未读/发件人/文件夹过滤")
+    @async_run
     @guard(ctx)
     def list_inbox(
         folder: str = "INBOX",
@@ -41,16 +42,19 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
             "email_id 格式为 folder:uid，如 INBOX:1"
         )
     )
+    @async_run
     @guard(ctx)
     def read_email(email_id: str) -> dict[str, Any]:
         return svc().read_email(email_id)
 
     @mcp.tool(description="拉取整条会话线程；email_id 格式为 folder:uid，如 INBOX:1")
+    @async_run
     @guard(ctx)
     def get_thread(email_id: str) -> dict[str, Any]:
         return thread().get_thread(email_id)
 
     @mcp.tool(description="关键词/发件人/日期范围搜索")
+    @async_run
     @guard(ctx)
     def search_emails(
         query: str = "",
@@ -64,11 +68,13 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
         )
 
     @mcp.tool(description="列出所有文件夹")
+    @async_run
     @guard(ctx)
     def list_folders() -> dict[str, Any]:
         return svc().list_folders()
 
     @mcp.tool(description="列出某邮件的附件元信息；email_id 格式为 folder:uid，如 INBOX:1")
+    @async_run
     @guard(ctx)
     def get_attachments(email_id: str) -> dict[str, Any]:
         return svc().get_attachments(email_id)
@@ -79,16 +85,19 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
             "email_id 格式为 folder:uid，如 INBOX:1"
         )
     )
+    @async_run
     @guard(ctx)
     def download_attachment(email_id: str, part_id: str) -> dict[str, Any]:
         return svc().download_attachment(email_id, part_id)
 
     @mcp.tool(description="读取原始 RFC 822 邮件头；email_id 格式为 folder:uid，如 INBOX:1")
+    @async_run
     @guard(ctx)
     def get_email_headers(email_id: str) -> dict[str, Any]:
         return svc().get_email_headers(email_id)
 
     @mcp.tool(description="返回当前账号身份信息")
+    @async_run
     @guard(ctx)
     def get_account_info() -> dict[str, Any]:
         return svc().get_account_info()

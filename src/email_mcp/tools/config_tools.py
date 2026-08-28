@@ -6,6 +6,7 @@ from mcp.server.fastmcp import FastMCP
 
 from email_mcp.context import AppContext
 from email_mcp.service.config_service import ConfigService
+from email_mcp.tools._guard import async_run
 
 
 def register(mcp: FastMCP, ctx: AppContext) -> None:
@@ -17,6 +18,7 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
             "已配置账号信息（不含密钥）"
         )
     )
+    @async_run
     def get_account_status() -> dict[str, Any]:
         return service.get_account_status()
 
@@ -26,6 +28,7 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
             "auth_secret 为敏感信息，请先征得用户同意再写入；写入后立即生效并持久化到 .env"
         )
     )
+    @async_run
     def configure_account(
         imap_host: str,
         smtp_host: str,
@@ -46,5 +49,6 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
         )
 
     @mcp.tool(description="用当前配置试连 IMAP 与 SMTP（仅登录验证，不发送邮件），返回逐项结果")
+    @async_run
     def test_email_connection() -> dict[str, Any]:
         return service.test_email_connection()

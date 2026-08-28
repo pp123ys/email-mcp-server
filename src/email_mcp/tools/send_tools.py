@@ -6,7 +6,7 @@ from mcp.server.fastmcp import FastMCP
 
 from email_mcp.context import AppContext
 from email_mcp.service.email_service import EmailService
-from email_mcp.tools._guard import guard
+from email_mcp.tools._guard import async_run, guard
 
 
 def register(mcp: FastMCP, ctx: AppContext) -> None:
@@ -22,6 +22,7 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
             "如需人工确认请改用 save_draft 存草稿后手动发送"
         )
     )
+    @async_run
     @guard(ctx)
     def send_email(
         to: list[str], subject: str, body: str, cc: list[str] | None = None
@@ -34,6 +35,7 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
             "to 可为空（先起草后补收件人），cc 可选"
         )
     )
+    @async_run
     @guard(ctx)
     def save_draft(
         to: list[str], subject: str, body: str, cc: list[str] | None = None
@@ -41,6 +43,7 @@ def register(mcp: FastMCP, ctx: AppContext) -> None:
         return svc().save_draft(to=to, cc=cc, subject=subject, body=body)
 
     @mcp.tool(description="列出草稿")
+    @async_run
     @guard(ctx)
     def list_drafts() -> dict[str, Any]:
         return svc().list_drafts()
