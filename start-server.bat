@@ -1,9 +1,10 @@
 @echo off
 REM Email MCP Server Launcher
-cd /d "D:\text\email service"
+REM Uses %~dp0 so this works from any checkout location.
+cd /d "%~dp0"
 
 REM Prefer the project venv interpreter (dependencies are installed in .venv)
-set "PYTHON=D:\text\email service\.venv\Scripts\python.exe"
+set "PYTHON=%~dp0.venv\Scripts\python.exe"
 if not exist "%PYTHON%" (
     echo [ERROR] Virtual environment interpreter not found:
     echo   %PYTHON%
