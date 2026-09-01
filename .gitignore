@@ -11,3 +11,10 @@ build/
 .coverage
 htmlcov/
 data/
+
+# 运行/本地产物
+.server.pid
+server.log
+z-mail-agent-temp/
+probe_search.py
+run-server.ps1
