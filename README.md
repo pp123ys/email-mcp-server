@@ -29,6 +29,67 @@ uv run email-mcp            # 未配置 .env 也能启动，会提示"未配置�
 
 > 提示：`configure_account` 写入的 `.env` 已被 gitignore，不会进入版本库。
 
+## 零基础快速上手（Windows 新手版）
+
+第一次接触命令行？按下面一步步来即可，全程只需装一个工具。
+
+### 1. 安装 uv
+
+uv 是 Python 的包管理器，会自动帮你下载 Python 并安装项目依赖，**不用手动装 Python**。
+
+1. 按 `Win` 键搜索 **PowerShell** 并打开，粘贴以下命令回车：
+   ```powershell
+   powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+   ```
+2. 装完后**关闭并重新打开** PowerShell，输入 `uv --version` 能看到版本号即成功。
+3. Git 无需再装：用 `git clone` 克隆的已有 Git；从 GitHub 下载 ZIP 解压的也不需要。
+
+### 2. 进入项目文件夹
+
+```powershell
+cd "D:\text\email service"
+```
+
+> 路径含空格必须加引号。也可以在资源管理器里进入该文件夹后，在地址栏输入 `powershell` 回车，即可在该目录打开 PowerShell。
+
+### 3. 配置邮箱
+
+```powershell
+copy .env.example .env
+```
+
+用记事本打开 `.env`（右键 → 打开方式 → 记事本）并填写：
+
+| 配置项 | 说明 |
+| --- | --- |
+| `EMAIL_IMAP_HOST` / `EMAIL_IMAP_PORT` | 收件服务器，如 QQ：`imap.qq.com` / `993`；163：`imap.163.com` / `993` |
+| `EMAIL_SMTP_HOST` / `EMAIL_SMTP_PORT` | 发件服务器，如 QQ：`smtp.qq.com` / `465` |
+| `EMAIL_USERNAME` | 你的邮箱地址 |
+| `EMAIL_AUTH_SECRET` | **授权码，不是邮箱登录密码** |
+
+授权码获取：登录邮箱网页版 → 设置/安全 → 开启 **IMAP/SMTP 服务** → 生成授权码（QQ / 163 走此流程；Gmail 为「应用专用密码」）。
+
+### 4. 启动
+
+```powershell
+uv run email-mcp
+```
+
+首次运行会自动下载 Python 与依赖，需等待几分钟。看到启动提示即成功。若尚未配好邮箱，服务也能以「未配置邮箱」状态启动（见上文「无凭据启动」）。
+
+### 5. 如何真正使用
+
+该服务是 MCP 服务器，没有独立界面，需配合 MCP 客户端使用：
+
+- 快速验证：`uv run email-mcp --http` 启动 HTTP 模式，用 [MCP Inspector](https://mcp.inspector.dev) 连接；
+- 日常使用：按下方「Claude Desktop 配置」接入 Claude Desktop 或 Cursor（建议 args 使用 `--project "D:\text\email service"` 指向项目绝对路径）。
+
+### 常见问题
+
+- **`z-mail-agent-temp/` 是什么？** 与本项目无关的另一个示例（z-mail-agent），可忽略。
+- **连接失败？** 确认邮箱网页版已开通 IMAP/SMTP 服务，且填的是授权码而非登录密码。
+- **提示「uv 不是内部或外部命令」？** 重新打开 PowerShell 后再试，或重新执行第 1 步的安装命令。
+
 ## Claude Desktop 配置
 
 在 `claude_desktop_config.json` 中添加：
